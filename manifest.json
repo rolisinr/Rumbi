@@ -1,0 +1,26 @@
+{
+  "name": "Rumbi",
+  "short_name": "Rumbi",
+  "description": "Muévete. Encuéntrate. Conversa.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1B2240",
+  "theme_color": "#2F80ED",
+  "orientation": "portrait-primary",
+  "lang": "es",
+  "categories": ["social", "navigation"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
