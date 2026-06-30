@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rumbi</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+body[data-theme="night"]{ --bg:#2D2D2D; --ink:#F3EEFF; --accent:#2F80ED; --gold:#FFC93C; --mint:#2EC4B6; --panel:rgba(45,45,55,.88); }
+body[data-theme="day"]  { --bg:#EAE6F0; --ink:#2A1B45; --accent:#1C64E0; --gold:#E8A800; --mint:#1FA593; --panel:rgba(246,247,251,.92); }
+*{ box-sizing:border-box; }
+body{ margin:0; font-family:'Inter',sans-serif; background:var(--bg); color:var(--ink); overflow:hidden; }
+#map{ position:absolute; top:0; left:0; right:0; bottom:0; }
+
+/* Screens */
+.screen{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:var(--bg); z-index:2000; }
+.card{ background:#F6F7FB; color:#22252B; border:2px solid var(--accent); border-radius:18px; padding:28px; max-width:320px; width:90%; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.3); }
+.card h1{ font-family:'Fredoka',sans-serif; margin:0 0 6px; color:var(--accent); }
+.card p{ font-size:13px; opacity:.7; margin-bottom:18px; }
+.btn{ display:inline-flex; align-items:center; gap:8px; background:var(--accent); color:#fff; border:none; padding:11px 18px; border-radius:999px; font-weight:600; font-size:14px; cursor:pointer; width:100%; justify-content:center; }
+input[type=text]{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid #ccc; font-size:14px; margin-bottom:10px; font-family:'Inter',sans-serif; }
+.error{ color:#E03131; font-size:12px; margin-bottom:8px; min-height:14px; }
+.hidden{ display:none !important; }
+label.terms{ display:flex; align-items:flex-start; gap:8px; font-size:12px; text-align:left; margin-bottom:14px; opacity:.85; }
+
+/* Topbar */
+.topbar{ position:absolute; top:16px; left:16px; right:16px; z-index:1000; display:flex; justify-content:space-between; align-items:center; }
+.topbar h2{ font-family:'Fredoka',sans-serif; font-size:18px; margin:0; color:var(--accent); }
+.pill-btn{ border:none; cursor:pointer; font-size:13px; padding:8px 14px; border-radius:999px; background:#F6F7FB; color:#22252B; font-family:'Inter',sans-serif; }
+.connected-badge{ font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--mint); color:#fff; padding:3px 8px; border-radius:999px; }
+
+/* Ranking widget (top-left overlay) */
+.ranking-widget{
+  position:absolute; top:64px; left:16px; z-index:1000;
+  background:#F6F7FB; border:2px solid var(--accent); border-radius:16px;
+  min-width:200px; max-width:220px; overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,.14);
+}
+.ranking-header{
+  background:var(--accent); color:#fff; padding:9px 14px;
+  font-family:'Fredoka',sans-serif; font-size:14px;
+  display:flex; justify-content:space-between; align-items:center; cursor:pointer;
+}
+.ranking-body{ padding:8px 0; max-height:260px; overflow-y:auto; }
+.rank-row{ display:flex; align-items:center; gap:8px; padding:6px 14px; font-size:13px; }
+.rank-row.rank-first{ font-weight:700; }
+.rank-pos{ width:20px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--gold); }
+.rank-nick{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#22252B; }
+.rank-count{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--gold); }
+.rank-empty{ padding:16px; text-align:center; opacity:.4; font-size:13px; color:#22252B; }
+
+/* Right panel */
+.right-panel{
+  position:absolute; top:64px; right:16px; bottom:16px; width:260px; z-index:1000;
+  background:#F6F7FB; border:2px solid var(--accent); border-radius:18px;
+  display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 6px 20px rgba(0,0,0,.16);
+}
+.panel-tabs{ background:var(--accent); display:flex; justify-content:space-around; padding:10px 0; flex-shrink:0; }
+.panel-tab{ font-size:18px; cursor:pointer; padding:4px 10px; border-radius:8px; transition:.15s; opacity:.7; }
+.panel-tab.active{ opacity:1; background:rgba(255,255,255,.2); }
+.panel-content{ flex:1; overflow:hidden; display:flex; flex-direction:column; }
+.tab-pane{ display:none; flex:1; flex-direction:column; overflow:hidden; }
+.tab-pane.active{ display:flex; }
+.chat-body{ flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:5px; }
+.chat-msg{ font-size:12px; padding:5px 9px; border-radius:10px; background:rgba(47,128,237,.1); color:#22252B; word-break:break-word; max-width:90%; }
+.chat-msg.mine{ background:var(--accent); color:#fff; align-self:flex-end; }
+.chat-nick{ font-weight:700; }
+.chat-ts{ font-family:'JetBrains Mono',monospace; font-size:10px; opacity:.5; margin-left:4px; }
+.chat-input-area{ display:flex; gap:6px; padding:10px; border-top:1px solid rgba(47,128,237,.2); flex-shrink:0; }
+.chat-input-area input{ flex:1; padding:8px 10px; border-radius:999px; border:1px solid #ccc; font-size:13px; font-family:'Inter',sans-serif; }
+.chat-input-area button{ background:var(--accent); color:#fff; border:none; border-radius:50%; width:34px; height:34px; cursor:pointer; font-size:15px; flex-shrink:0; }
+.panel-placeholder{ flex:1; display:flex; align-items:center; justify-content:center; opacity:.4; font-size:13px; padding:20px; text-align:center; color:#22252B; }
+
+/* Profile tab */
+.profile-tab-content{ flex:1; overflow-y:auto; padding:14px; }
+.profile-avatar-big{ font-size:48px; text-align:center; margin:10px 0 4px; }
+.profile-tab-nick{ font-family:'Fredoka',sans-serif; font-size:18px; color:var(--accent); text-align:center; margin-bottom:14px; }
+.settings-group{ margin-bottom:14px; }
+.settings-label{ font-size:11px; font-weight:600; text-transform:uppercase; opacity:.5; margin-bottom:8px; color:#22252B; }
+.setting-row{ display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(0,0,0,.07); font-size:13px; color:#22252B; }
+.setting-row:last-child{ border-bottom:none; }
+.toggle-group{ display:flex; gap:4px; }
+.toggle-btn{ border:1px solid var(--accent); background:transparent; color:var(--accent); padding:4px 12px; border-radius:999px; font-size:12px; cursor:pointer; transition:.15s; }
+.toggle-btn.active{ background:var(--accent); color:#fff; }
+.switch{ position:relative; width:38px; height:22px; }
+.switch input{ opacity:0; width:0; height:0; }
+.slider{ position:absolute; cursor:pointer; inset:0; background:#ccc; border-radius:22px; transition:.3s; }
+.slider:before{ content:''; position:absolute; width:16px; height:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+.switch input:checked+.slider{ background:var(--accent); }
+.switch input:checked+.slider:before{ transform:translateX(16px); }
+.shape-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:6px; }
+.shape-opt{ aspect-ratio:1; display:flex; align-items:center; justify-content:center; border:2px solid #ddd; border-radius:10px; cursor:pointer; font-size:20px; transition:.15s; background:#F6F7FB; }
+.shape-opt.active{ border-color:var(--accent); background:rgba(47,128,237,.1); }
+
+/* Mobile toolbar (directo en el fondo, sin chat bar separado) */
+.mobile-toolbar{ display:none; position:absolute; bottom:0; left:0; right:0; z-index:1000; background:#F6F7FB; border-top:2px solid var(--accent); padding:8px 10px; gap:6px; }
+.mobile-tool-btn{ flex:1; background:none; border:1px solid rgba(47,128,237,.3); border-radius:12px; padding:9px 4px; font-size:13px; cursor:pointer; color:#22252B; font-family:'Inter',sans-serif; font-weight:500; }
+/* Sheet input area (dentro del chat sheet) */
+.sheet-input-area{ display:flex; gap:8px; padding:10px; border-top:1px solid rgba(47,128,237,.2); flex-shrink:0; }
+.sheet-input-area input{ flex:1; padding:9px 14px; border-radius:999px; border:1px solid #ccc; font-size:14px; font-family:'Inter',sans-serif; }
+.sheet-input-area button{ background:var(--accent); color:#fff; border:none; border-radius:50%; width:36px; height:36px; cursor:pointer; font-size:16px; flex-shrink:0; }
+/* Toggle switch más visible */
+.switch{ position:relative; width:44px; height:24px; }
+.switch input{ opacity:0; width:0; height:0; }
+.slider{ position:absolute; cursor:pointer; inset:0; background:#ddd; border-radius:24px; transition:.3s; border:2px solid #bbb; }
+.slider:before{ content:''; position:absolute; width:16px; height:16px; left:2px; bottom:2px; background:#fff; border-radius:50%; transition:.3s; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+.switch input:checked+.slider{ background:var(--mint); border-color:var(--mint); }
+.switch input:checked+.slider:before{ transform:translateX(20px); }
+/* Toggle buttons GPS/Manual más visibles */
+.toggle-btn{ border:2px solid var(--accent); background:#fff; color:var(--accent); padding:6px 14px; border-radius:999px; font-size:13px; cursor:pointer; transition:.15s; font-weight:600; }
+.toggle-btn.active{ background:var(--accent); color:#fff; }
+@media(max-width:768px){
+  .right-panel{display:none;} .ranking-widget{display:none;}
+  .mobile-toolbar{display:flex;}
+  .mini-profile{ bottom:80px; left:8px; right:8px; width:auto; }
+  .reaction-picker{ bottom:240px; left:8px; }
+  .report-picker{ bottom:240px; left:8px; right:8px; width:auto; }
+  .block-picker{ bottom:240px; left:8px; right:8px; width:auto; }
+}
+
+/* Markers */
+.marker-wrap{ position:relative; display:flex; flex-direction:column; align-items:center; pointer-events:none; }
+.glow-shape{ width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:16px; background-color:rgba(47,128,237,.38); border:2px solid #2F80ED; animation:pulse 2.2s ease-in-out infinite; }
+.shape-circle { border-radius:50%; }
+.shape-square  { border-radius:6px; }
+.shape-diamond { border-radius:6px; transform:rotate(45deg); }
+.shape-diamond .inner{ display:block; transform:rotate(-45deg); }
+.nickname-tag{ margin-top:4px; font-size:11px; font-weight:600; background:#F6F7FB; color:#22252B; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+@keyframes pulse{ 0%,100%{box-shadow:0 0 10px 2px #2F80ED;} 50%{box-shadow:0 0 28px 8px #2F80ED;} }
+
+/* Chat bubbles */
+.leaflet-tooltip.chat-bubble-tt{ background:rgba(20,20,30,.88); color:#fff; border:1px solid rgba(255,255,255,.15); border-radius:12px; padding:0; box-shadow:0 2px 10px rgba(0,0,0,.3); pointer-events:none; max-width:180px; font-size:12px; }
+.leaflet-tooltip.chat-bubble-tt::before{ display:none; }
+.bubble-line{ padding:5px 10px; border-top:1px solid rgba(255,255,255,.1); word-break:break-word; }
+.bubble-line:first-child{ border-top:none; }
+
+/* Mini-profile card */
+.mini-profile{
+  position:absolute; bottom:80px; left:16px; z-index:1001;
+  background:#F6F7FB; border:2px solid var(--accent); border-radius:18px;
+  padding:16px; width:220px; box-shadow:0 6px 20px rgba(0,0,0,.2);
+}
+.mini-close{ position:absolute; top:10px; right:12px; background:none; border:none; font-size:18px; cursor:pointer; color:#999; line-height:1; }
+.mini-avatar{ font-size:40px; text-align:center; margin-bottom:4px; }
+.mini-nickname{ font-family:'Fredoka',sans-serif; font-size:18px; color:var(--accent); text-align:center; margin-bottom:4px; }
+.mini-reactions-count{ font-family:'JetBrains Mono',monospace; font-size:11px; text-align:center; opacity:.6; color:#22252B; margin-bottom:8px; }
+.mini-badges{ display:flex; flex-wrap:wrap; gap:4px; justify-content:center; margin-bottom:10px; }
+.mini-badge{ background:rgba(47,128,237,.1); border-radius:999px; padding:2px 8px; font-size:10px; color:var(--accent); }
+.mini-tiktok a{ display:inline-flex; align-items:center; gap:5px; background:#FE2C55; color:#fff; border-radius:999px; padding:4px 10px; font-size:11px; font-weight:600; text-decoration:none; }
+.mini-actions{ display:flex; flex-direction:column; gap:5px; margin-top:10px; }
+.mini-btn{ border:none; padding:7px 10px; border-radius:999px; font-size:12px; cursor:pointer; font-weight:600; text-align:center; transition:.15s; }
+.mini-btn-react  { background:rgba(255,201,60,.2); color:#9A6000; }
+.mini-btn-fav    { background:rgba(47,128,237,.1); color:var(--accent); }
+.mini-btn-report { background:#FFF3E0; color:#E65100; }
+.mini-btn-block  { background:#FFEBEE; color:#C62828; }
+.mini-btn:hover  { opacity:.8; }
+
+/* Reaction picker */
+.reaction-picker{ position:absolute; bottom:210px; left:16px; z-index:1002; background:#F6F7FB; border:2px solid var(--accent); border-radius:14px; padding:10px; display:flex; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.18); }
+.reaction-opt{ font-size:22px; cursor:pointer; transition:transform .1s; }
+.reaction-opt:hover{ transform:scale(1.3); }
+
+/* Report picker */
+.report-picker{ position:absolute; bottom:210px; left:16px; z-index:1002; background:#F6F7FB; border:2px solid #E65100; border-radius:14px; padding:12px; box-shadow:0 4px 16px rgba(0,0,0,.18); width:220px; }
+.report-picker p{ margin:0 0 8px; font-size:12px; font-weight:600; color:#E65100; }
+.report-opt{ display:block; width:100%; text-align:left; background:none; border:none; padding:6px 4px; font-size:13px; cursor:pointer; border-radius:6px; }
+.report-opt:hover{ background:rgba(230,81,0,.08); }
+
+/* Block picker */
+.block-picker{ position:absolute; bottom:210px; left:16px; z-index:1002; background:#F6F7FB; border:2px solid #C62828; border-radius:14px; padding:12px; box-shadow:0 4px 16px rgba(0,0,0,.18); width:220px; }
+.block-picker p{ margin:0 0 8px; font-size:12px; font-weight:600; color:#C62828; }
+.block-opt{ display:block; width:100%; text-align:left; background:none; border:none; padding:6px 4px; font-size:13px; cursor:pointer; border-radius:6px; }
+.block-opt:hover{ background:rgba(198,40,40,.08); }
+
+/* Bottom sheet */
+.bottom-sheet{
+  position:fixed; bottom:0; left:0; right:0; z-index:1500;
+  background:#F6F7FB; border-top:2px solid var(--accent);
+  border-radius:18px 18px 0 0; max-height:72vh;
+  display:flex; flex-direction:column;
+  transform:translateY(100%); transition:transform .3s ease;
+  box-shadow:0 -4px 20px rgba(0,0,0,.15);
+}
+.bottom-sheet.open{ transform:translateY(0); }
+.bottom-sheet .sheet-scroll{ flex:1; overflow-y:auto; padding:0 16px 8px; }
+.sheet-header{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px 10px; flex-shrink:0; }
+.sheet-header h3{ margin:0; font-family:'Fredoka',sans-serif; color:var(--accent); font-size:17px; }
+.sheet-close{ background:none; border:none; font-size:22px; cursor:pointer; color:#999; line-height:1; }
+.sheet-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:1400; }
+.sheet-overlay.active{ display:block; }
+.toast{ position:fixed; bottom:24px; right:24px; background:#1B2240; color:#fff; padding:11px 18px; border-radius:12px; font-size:13px; z-index:3000; animation:fadeUp .3s ease; box-shadow:0 4px 16px rgba(0,0,0,.3); }
+@keyframes fadeUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+/* Search results */
+.search-result{ display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px; color:#22252B; transition:.1s; }
+.search-result:hover{ background:rgba(47,128,237,.1); }
+.online-dot{ width:8px; height:8px; border-radius:50%; background:var(--mint); flex-shrink:0; }
+/* DM */
+.dm-convo-item{ display:flex; flex-direction:column; padding:10px; border-radius:10px; cursor:pointer; font-size:13px; color:#22252B; border-bottom:1px solid rgba(0,0,0,.06); }
+.dm-convo-item:hover{ background:rgba(47,128,237,.08); }
+.dm-convo-nick{ font-weight:700; font-size:13px; margin-bottom:2px; }
+.dm-convo-preview{ font-size:12px; opacity:.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dm-msg{ font-size:12px; padding:6px 10px; border-radius:10px; max-width:85%; word-break:break-word; }
+.dm-msg.mine{ background:var(--accent); color:#fff; align-self:flex-end; }
+.dm-msg.theirs{ background:rgba(47,128,237,.12); color:#22252B; align-self:flex-start; }
+/* Meeting pins */
+.pin-wrap{ display:flex; flex-direction:column; align-items:center; pointer-events:none; }
+.pin-icon{ font-size:28px; filter:drop-shadow(0 2px 4px rgba(0,0,0,.4)); animation:pinPop .3s ease; }
+.pin-label{ margin-top:2px; font-size:10px; font-weight:700; background:var(--gold); color:#22252B; padding:2px 6px; border-radius:999px; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+@keyframes pinPop{ from{transform:scale(0) translateY(10px);} to{transform:scale(1) translateY(0);} }
+.my-pin-item{ background:#F6F7FB; border:1px solid rgba(47,128,237,.2); border-radius:10px; padding:8px 10px; font-size:12px; display:flex; align-items:center; gap:8px; color:#22252B; margin-bottom:5px; }
+.my-pin-del{ background:none; border:none; cursor:pointer; color:#C62828; font-size:16px; margin-left:auto; line-height:1; }
+</style>
+</head>
+<body data-theme="night">
+
+<!-- Loading -->
+<div id="loadingScreen" class="screen"><div class="card"><p>Cargando Rumbi…</p></div></div>
+
+<!-- Login -->
+<div id="authScreen" class="screen hidden">
+  <div class="card">
+    <h1>Rumbi</h1>
+    <p>Muévete. Encuéntrate. Conversa.</p>
+    <button class="btn" id="loginBtn">Iniciar sesión con Google</button>
+  </div>
+</div>
+
+<!-- Nickname -->
+<div id="onboardScreen" class="screen hidden">
+  <div class="card">
+    <h1>Elige tu nickname</h1>
+    <p>Será tu identidad pública en el mapa</p>
+    <input type="text" id="nicknameInput" placeholder="Ej. Zorro_22" maxlength="20">
+    <div class="error" id="nicknameError"></div>
+    <label class="terms">
+      <input type="checkbox" id="termsCheck">
+      Confirmo que tengo 18 años o más y acepto los términos de uso.
+    </label>
+    <button class="btn" id="saveNicknameBtn">Entrar a Rumbi</button>
+  </div>
+</div>
+
+<!-- Bloqueado -->
+<div id="blockedScreen" class="screen hidden">
+  <div class="card">
+    <h1>Acceso restringido</h1>
+    <p>Esta cuenta no puede acceder a Rumbi en este momento.</p>
+  </div>
+</div>
+
+<!-- App -->
+<div id="appScreen" class="hidden">
+  <div id="map"></div>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <h2>Rumbi <span id="myNicknameLabel" style="font-size:13px;color:#888;font-weight:400;font-family:'Inter',sans-serif;"></span></h2>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="connected-badge" id="connectedCount">● 1</span>
+      <button class="pill-btn" id="themeToggle">🌙 Noche</button>
+      <button class="pill-btn" id="logoutBtn">Salir</button>
+    </div>
+  </div>
+
+  <!-- Ranking widget (desktop) -->
+  <div class="ranking-widget">
+    <div class="ranking-header" id="rankingHeader">🏆 Top del momento <span id="rankToggle">▾</span></div>
+    <div class="ranking-body" id="rankingBody"><div class="rank-empty">Cargando…</div></div>
+  </div>
+
+  <!-- Panel derecho (desktop) -->
+  <div class="right-panel">
+    <div class="panel-tabs">
+      <span class="panel-tab active" data-tab="chat">💬</span>
+      <span class="panel-tab" data-tab="dm">✉️</span>
+      <span class="panel-tab" data-tab="profile">👤</span>
+      <span class="panel-tab" data-tab="search">🔍</span>
+    </div>
+    <div class="panel-content">
+      <!-- Chat -->
+      <div class="tab-pane active" id="tab-chat">
+        <div class="chat-body" id="chatBody"></div>
+        <div class="chat-input-area">
+          <input type="search" id="chatInput" placeholder="Escribe un mensaje…" maxlength="150" autocomplete="off" autocorrect="off" data-form-type="other">
+          <button id="sendBtn">➤</button>
+        </div>
+      </div>
+      <!-- DMs -->
+      <div class="tab-pane" id="tab-dm">
+        <!-- Lista de conversaciones -->
+        <div id="dmList" style="flex:1;overflow-y:auto;padding:8px;"></div>
+        <!-- Vista de conversación (oculta hasta que se abre una) -->
+        <div id="dmConvo" class="hidden" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid rgba(47,128,237,.2);flex-shrink:0;">
+            <button onclick="closeDmConvo()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--accent);">←</button>
+            <span id="dmConvoName" style="font-weight:600;font-size:14px;color:#22252B;"></span>
+          </div>
+          <div id="dmMessages" style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:5px;"></div>
+          <div style="padding:2px 12px 6px;font-size:10px;opacity:.5;text-align:center;color:#22252B;">Mensajes se eliminan automáticamente después de 7 días</div>
+          <div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid rgba(47,128,237,.2);flex-shrink:0;">
+            <input type="search" id="dmInput" placeholder="Mensaje privado…" maxlength="500"
+              autocomplete="off" style="flex:1;padding:8px 10px;border-radius:999px;border:1px solid #ccc;font-size:13px;font-family:'Inter',sans-serif;">
+            <button id="dmSendBtn" style="background:var(--accent);color:#fff;border:none;border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:15px;flex-shrink:0;">➤</button>
+          </div>
+        </div>
+      </div>
+      <!-- Perfil -->
+      <div class="tab-pane" id="tab-profile">
+        <div class="profile-tab-content">
+          <div class="profile-avatar-big" id="tabAvatar">🙂</div>
+          <div class="profile-tab-nick" id="tabNick"></div>
+          <div class="settings-group">
+            <div class="settings-label">Ubicación</div>
+            <div class="setting-row">
+              <span>Modo</span>
+              <div class="toggle-group">
+                <button class="toggle-btn active" id="gpsBtn">GPS</button>
+                <button class="toggle-btn" id="manualBtn">Manual</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <span>Pausar ubicación</span>
+              <label class="switch"><input type="checkbox" id="pauseToggle"><span class="slider"></span></label>
+            </div>
+            <div class="setting-row">
+              <span>Mostrar estela</span>
+              <label class="switch"><input type="checkbox" id="trailToggle" checked><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Forma de tu punto</div>
+            <div class="shape-grid" id="shapeGrid">
+              <div class="shape-opt active" data-shape="circle">⭕</div>
+              <div class="shape-opt" data-shape="square">🟦</div>
+              <div class="shape-opt" data-shape="diamond">🔷</div>
+              <div class="shape-opt" data-shape="star">⭐</div>
+            </div>
+          </div>
+        </div>
+      </div>
+          <div class="settings-group">
+            <div class="settings-label">Puntos de encuentro</div>
+            <button onclick="openPinModal()" style="width:100%;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">📍 Crear punto de encuentro</button>
+            <div id="myPinsList"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Buscar -->
+      <div class="tab-pane" id="tab-search">
+        <div style="padding:10px 10px 6px;">
+          <input type="search" id="searchInput" placeholder="🔍 Buscar usuario conectado…"
+            style="width:100%;padding:9px 14px;border-radius:999px;border:1px solid #ccc;font-size:13px;font-family:'Inter',sans-serif;"
+            autocomplete="off">
+        </div>
+        <div id="searchResults" style="flex:1;overflow-y:auto;padding:0 8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar móvil -->
+  <div class="mobile-toolbar">
+    <button class="mobile-tool-btn" id="mobileRankBtn">🏆 Top</button>
+    <button class="mobile-tool-btn" id="mobileSearchBtn">🔍 Buscar</button>
+    <button class="mobile-tool-btn" id="mobileDmBtn">✉️ DMs</button>
+    <button class="mobile-tool-btn" id="mobileProfileBtn">👤 Perfil</button>
+    <button class="mobile-tool-btn" id="mobileChatBtn">💬 Chat</button>
+  </div>
+
+  <!-- Overlay para cerrar bottom sheets -->
+  <div class="sheet-overlay" id="sheetOverlay"></div>
+
+  <!-- Bottom sheet: Ranking -->
+  <div class="bottom-sheet" id="sheetRanking">
+    <div class="sheet-header">
+      <h3>🏆 Top del momento</h3>
+      <button class="sheet-close" onclick="closeSheet('sheetRanking')">×</button>
+    </div>
+    <div class="sheet-scroll"><div id="rankingBodyMobile"><div class="rank-empty">Cargando…</div></div></div>
+  </div>
+
+  <!-- Bottom sheet: Chat (con input integrado) -->
+  <div class="bottom-sheet" id="sheetChat">
+    <div class="sheet-header">
+      <h3>💬 Chat</h3>
+      <button class="sheet-close" onclick="closeSheet('sheetChat')">×</button>
+    </div>
+    <div class="sheet-scroll">
+      <div class="chat-body" id="chatBodyMobile" style="display:flex;flex-direction:column;gap:5px;min-height:100px;"></div>
+    </div>
+    <div class="sheet-input-area">
+      <input type="search" id="chatInputMobile" placeholder="Escribe un mensaje…" maxlength="150"
+        autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false" data-form-type="other">
+      <button id="sendBtnMobile">➤</button>
+    </div>
+  </div>
+
+  <!-- Bottom sheet: Perfil -->
+  <div class="bottom-sheet" id="sheetProfile">
+    <div class="sheet-header">
+      <h3>👤 Mi perfil</h3>
+      <button class="sheet-close" onclick="closeSheet('sheetProfile')">×</button>
+    </div>
+    <div class="sheet-scroll">
+      <div class="profile-avatar-big" id="tabAvatarMobile">🙂</div>
+      <div class="profile-tab-nick" id="tabNickMobile"></div>
+      <div class="settings-group">
+        <div class="settings-label">Ubicación</div>
+        <div class="setting-row"><span>Modo</span>
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="gpsBtnM">GPS</button>
+            <button class="toggle-btn" id="manualBtnM">Manual</button>
+          </div>
+        </div>
+        <div class="setting-row"><span>Pausar ubicación</span>
+          <label class="switch"><input type="checkbox" id="pauseToggleM"><span class="slider"></span></label>
+        </div>
+        <div class="setting-row"><span>Mostrar estela</span>
+          <label class="switch"><input type="checkbox" id="trailToggleM" checked><span class="slider"></span></label>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">Forma de tu punto</div>
+        <div class="shape-grid" id="shapeGridMobile">
+          <div class="shape-opt active" data-shape="circle">⭕</div>
+          <div class="shape-opt" data-shape="square">🟦</div>
+          <div class="shape-opt" data-shape="diamond">🔷</div>
+          <div class="shape-opt" data-shape="star">⭐</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Crear punto de encuentro -->
+  <div id="pinModal" class="modal-overlay hidden">
+    <div style="background:#F6F7FB;border:2px solid var(--accent);border-radius:18px;padding:24px;max-width:320px;width:90%;">
+      <h3 style="font-family:'Fredoka',sans-serif;color:var(--accent);margin:0 0 14px;font-size:18px;">📍 Nuevo punto de encuentro</h3>
+      <input type="text" id="pinMessage" placeholder="Mensaje (ej. aquí a las 7pm)" maxlength="80"
+        style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #ccc;font-size:13px;margin-bottom:12px;font-family:'Inter',sans-serif;">
+      <div style="margin-bottom:14px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+          <input type="radio" name="pinType" value="normal" checked> Normal (dura 24 horas)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="pinType" value="destacado"> ⭐ Destacado (dura 7 días — solo 1 activo a la vez)
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('pinModal').classList.add('hidden')" style="background:#F6F7FB;border:1px solid #ddd;padding:9px 18px;border-radius:999px;cursor:pointer;font-size:13px;">Cancelar</button>
+        <button id="pinCreateBtn" style="background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:999px;cursor:pointer;font-size:13px;font-weight:600;">Crear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom sheet: Búsqueda (mobile) -->
+  <div class="bottom-sheet" id="sheetSearch">
+    <div class="sheet-header">
+      <h3>🔍 Buscar usuario</h3>
+      <button class="sheet-close" onclick="closeSheet('sheetSearch')">×</button>
+    </div>
+    <div class="sheet-scroll">
+      <input type="search" id="searchInputM" placeholder="Escribe un nickname…"
+        style="width:100%;padding:9px 14px;border-radius:999px;border:1px solid #ccc;font-size:13px;font-family:'Inter',sans-serif;margin-bottom:10px;"
+        autocomplete="off">
+      <div id="searchResultsM"></div>
+    </div>
+  </div>
+
+  <!-- Bottom sheet: DMs (mobile) -->
+  <div class="bottom-sheet" id="sheetDm">
+    <div class="sheet-header" id="dmSheetHeader">
+      <h3>✉️ Mensajes</h3>
+      <button class="sheet-close" onclick="closeSheet('sheetDm')">×</button>
+    </div>
+    <div id="dmSheetList" class="sheet-scroll">
+      <div style="opacity:.4;font-size:13px;padding:20px;text-align:center;color:#22252B;">Cargando…</div>
+    </div>
+    <div id="dmSheetConvo" class="hidden" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div id="dmSheetMessages" style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:5px;"></div>
+      <div style="padding:2px 12px 4px;font-size:10px;opacity:.5;text-align:center;color:#22252B;">Mensajes se eliminan automáticamente después de 7 días</div>
+      <div class="sheet-input-area">
+        <input type="search" id="dmInputM" placeholder="Mensaje privado…" maxlength="500" autocomplete="off"
+          style="flex:1;padding:9px 14px;border-radius:999px;border:1px solid #ccc;font-size:13px;font-family:'Inter',sans-serif;">
+        <button id="dmSendBtnM" style="background:var(--accent);color:#fff;border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:16px;flex-shrink:0;">➤</button>
+      </div>
+    </div>
+  </div>
+  <div id="miniProfileCard" class="mini-profile hidden">
+    <button class="mini-close" id="miniClose">×</button>
+    <div class="mini-avatar" id="miniAvatar">🙂</div>
+    <div class="mini-nickname" id="miniNick"></div>
+    <div class="mini-reactions-count" id="miniReactCount"></div>
+    <div class="mini-badges" id="miniBadges"></div>
+    <div class="mini-tiktok" id="miniTiktok"></div>
+    <div class="mini-actions">
+      <button class="mini-btn mini-btn-react"  id="miniReactBtn">❤️ Reaccionar</button>
+      <button class="mini-btn mini-btn-fav"    id="miniFavBtn">⭐ Favorito</button>
+      <button class="mini-btn" style="background:rgba(47,128,237,.1);color:var(--accent);" id="miniDmBtn">✉️ Mensaje privado</button>
+      <button class="mini-btn mini-btn-report" id="miniReportBtn">🚨 Reportar</button>
+      <button class="mini-btn mini-btn-block"  id="miniBlockBtn">🚫 Bloquear</button>
+    </div>
+  </div>
+
+  <!-- Reaction picker -->
+  <div id="reactionPicker" class="reaction-picker hidden">
+    <span class="reaction-opt" data-emoji="❤️">❤️</span>
+    <span class="reaction-opt" data-emoji="😂">😂</span>
+    <span class="reaction-opt" data-emoji="👍">👍</span>
+    <span class="reaction-opt" data-emoji="🔥">🔥</span>
+    <span class="reaction-opt" data-emoji="👏">👏</span>
+  </div>
+
+  <!-- Report picker -->
+  <div id="reportPicker" class="report-picker hidden">
+    <p>¿Por qué reportas?</p>
+    <button class="report-opt" data-type="mensaje">💬 Mensaje inapropiado</button>
+    <button class="report-opt" data-type="menor_edad">👤 Posible menor de edad</button>
+    <button class="report-opt" data-type="otro">⚠️ Otro motivo</button>
+  </div>
+
+  <!-- Block picker -->
+  <div id="blockPicker" class="block-picker hidden">
+    <p>¿Cómo quieres bloquear?</p>
+    <button class="block-opt" data-hide="false">🔇 Solo bloquear interacción</button>
+    <button class="block-opt" data-hide="true">🗺️ Bloquear y ocultar del mapa</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL      = 'https://jfjzpowfgbvblhhtlcya.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impmanpwb3dmZ2J2YmxoaHRsY3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NTkxOTEsImV4cCI6MjA5ODMzNTE5MX0.m0CgHH0GGCbSSftf0h2mWl01ByOgcYHoFIyGPEPBt7M';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── Constants ──
+const SPAM_CD     = 3000;
+const TRAIL_MAX   = 8;
+const BUBBLE_MAX  = 3;
+const BUBBLE_DUR  = 5000;
+const POS_INT     = 3000;
+const RANK_INT    = 60000; // refresh ranking every 60s
+
+// ── State ──
+let map, myMarker, myProfile;
+let myPosition=null, myTrailPos=[], myTrailSegs=[];
+let channel, nightTiles, dayTiles;
+const otherUsers  = {};   // userId → { marker, trailPos, trailSegs }
+const bubbleQueues= {};   // markerKey → [msg,...]
+let lastMsgTime   = 0;
+let locationPaused= false;
+let manualMode    = false;
+let showTrail     = true;
+let myShape       = 'circle';
+let bannedWords   = [];
+let myReactions   = {};   // targetId → emoji
+let myFavorites   = new Set();
+let myBlocks      = new Set(); // hide-from-map blocked users
+let miniUserId    = null;
+
+// ── Screens ──
+function showScreen(id) {
+  ['loadingScreen','authScreen','onboardScreen','blockedScreen'].forEach(s=>
+    document.getElementById(s).classList.toggle('hidden', s!==id)
+  );
+  document.getElementById('appScreen').classList.toggle('hidden', id!=='appScreen');
+}
+
+// ── Init ──
+async function init() {
+  const { data:{ session } } = await sb.auth.getSession();
+  if (!session) { showScreen('authScreen'); return; }
+  await routeUser(session.user);
+}
+sb.auth.onAuthStateChange((e,session)=>{ if(e==='SIGNED_IN'&&session) routeUser(session.user); });
+
+async function routeUser(user) {
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (!profile) { showScreen('onboardScreen'); return; }
+  const { data: ban } = await sb.from('bans').select('*').eq('profile_id', user.id).maybeSingle();
+  if (ban) { showScreen('blockedScreen'); return; }
+  myProfile = profile;
+  showScreen('appScreen');
+  document.getElementById('myNicknameLabel').textContent = '— ' + profile.nickname;
+  if (!map) startApp(profile);
+}
+
+// ── Auth buttons ──
+document.getElementById('loginBtn').addEventListener('click', ()=>
+  sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin } })
+);
+document.getElementById('saveNicknameBtn').addEventListener('click', async ()=>{
+  const nick = document.getElementById('nicknameInput').value.trim();
+  const err  = document.getElementById('nicknameError');
+  err.textContent='';
+  if (!document.getElementById('termsCheck').checked){ err.textContent='Confirma tener 18 años o más.'; return; }
+  if (nick.length<3){ err.textContent='Mínimo 3 caracteres.'; return; }
+  const { data:{ session } } = await sb.auth.getSession();
+  const { error } = await sb.from('profiles').insert({ id:session.user.id, nickname:nick, age_confirmed:true });
+  if (error){ err.textContent = error.code==='23505'?'Nickname en uso, elige otro.':'Error al guardar, intenta de nuevo.'; return; }
+  routeUser(session.user);
+});
+
+// ══════════════════════════════════════════════
+//  START APP
+// ══════════════════════════════════════════════
+async function startApp(profile) {
+  myShape = profile.shape || 'circle';
+  await loadUserData();
+  initMap(profile);
+  setupTheme();
+  setupTabs();
+  setupChat();
+  setupProfileTab(profile);
+  setupRanking();
+  setupMiniProfile();
+  setupMobileToolbar(profile);
+  setupSearch();
+  setupDms();
+  loadDmList();
+  loadMeetingPoints();
+  setupMeetingPointsRealtime();
+  startRealtime(profile);
+  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+    if(channel) await channel.unsubscribe();
+    await sb.auth.signOut(); window.location.reload();
+  });
+}
+
+// ── Load user data ──
+async function loadUserData() {
+  const [wRes, rRes, fRes, bRes] = await Promise.all([
+    sb.from('banned_words').select('word'),
+    sb.from('reactions').select('target_id,emoji').eq('reactor_id', myProfile.id),
+    sb.from('favorites').select('favorite_id').eq('user_id', myProfile.id),
+    sb.from('blocks').select('blocked_id,hide_from_map').eq('blocker_id', myProfile.id)
+  ]);
+  bannedWords = wRes.data?.map(w=>w.word) || [];
+  rRes.data?.forEach(r=>{ myReactions[r.target_id]=r.emoji; });
+  fRes.data?.forEach(f=>{ myFavorites.add(f.favorite_id); });
+  bRes.data?.forEach(b=>{ if(b.hide_from_map) myBlocks.add(b.blocked_id); });
+}
+
+// ── Bad word filter ──
+function filterBadWords(text) {
+  if (!bannedWords.length) return text;
+  let t = text;
+  bannedWords.forEach(w=>{ t = t.replace(new RegExp(w,'gi'), '*'.repeat(w.length)); });
+  return t;
+}
+
+// ── Map ──
+function initMap(profile) {
+  map = L.map('map',{ zoomControl:false, attributionControl:false, maxZoom:17 }).setView([-12.0464,-77.0428],14);
+  nightTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:17});
+  dayTiles   = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:17});
+  nightTiles.addTo(map);
+  myMarker = L.marker([-12.0464,-77.0428],{ icon:makeIcon(profile.nickname,'🙂',myShape), draggable:false }).addTo(map);
+  let firstFix=true;
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(pos=>{
+      if(locationPaused || manualMode) return;
+      const lat=round(pos.coords.latitude), lng=round(pos.coords.longitude);
+      myPosition={lat,lng};
+      myMarker.setLatLng([lat,lng]);
+      if(firstFix){ map.setView([lat,lng],16); firstFix=false; }
+      if(showTrail){ myTrailPos.push([lat,lng]); if(myTrailPos.length>TRAIL_MAX) myTrailPos.shift(); drawTrail(myTrailPos,myTrailSegs); }
+    }, e=>console.warn('GPS:',e.message),{ enableHighAccuracy:true });
+  }
+  // Close pickers when clicking map
+  map.on('click', ()=>{ closeAllPickers(); hideMiniProfile(); });
+}
+
+// ── Theme ──
+function setupTheme() {
+  document.getElementById('themeToggle').addEventListener('click',()=>{
+    const isNight=document.body.getAttribute('data-theme')==='night';
+    const btn=document.getElementById('themeToggle');
+    if(isNight){ document.body.setAttribute('data-theme','day'); map.removeLayer(nightTiles); dayTiles.addTo(map); btn.textContent='☀️ Día'; }
+    else{ document.body.setAttribute('data-theme','night'); map.removeLayer(dayTiles); nightTiles.addTo(map); btn.textContent='🌙 Noche'; }
+  });
+}
+
+// ── Tabs ──
+function setupTabs() {
+  document.querySelectorAll('.panel-tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      document.querySelectorAll('.panel-tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// ── Chat ──
+function setupChat() {
+  document.getElementById('sendBtn').addEventListener('click',()=>sendChat('chatInput'));
+  document.getElementById('sendBtnMobile').addEventListener('click',()=>sendChat('chatInputMobile'));
+  document.getElementById('chatInput').addEventListener('keydown',e=>{ if(e.key==='Enter') sendChat('chatInput'); });
+  document.getElementById('chatInputMobile').addEventListener('keydown',e=>{ if(e.key==='Enter') sendChat('chatInputMobile'); });
+}
+
+function sendChat(inputId) {
+  const input=document.getElementById(inputId);
+  const rawText=input.value.trim();
+  if(!rawText||!myProfile||!channel) return;
+  const now=Date.now();
+  if(now-lastMsgTime<SPAM_CD){
+    const wait=SPAM_CD-(now-lastMsgTime);
+    input.placeholder='⏳ Espera un momento…';
+    setTimeout(()=>{ input.placeholder='Escribe un mensaje…'; },wait);
+    return;
+  }
+  lastMsgTime=now;
+  const text=filterBadWords(rawText);
+  input.value='';
+  const payload={ userId:myProfile.id, nickname:myProfile.nickname, emoji:'🙂', shape:myShape, message:text };
+  addBubble(myMarker,'me',text);
+  addToChatPanel(myProfile.nickname, text, true);
+  channel.send({ type:'broadcast', event:'chat', payload });
+}
+
+// ── Profile tab ──
+function setupProfileTab(profile) {
+  document.getElementById('tabAvatar').textContent = '🙂';
+  document.getElementById('tabNick').textContent = profile.nickname;
+  document.querySelector(`[data-shape="${myShape}"]`)?.classList.add('active');
+
+  // Shape selector
+  document.querySelectorAll('.shape-opt').forEach(opt=>{
+    opt.addEventListener('click', async ()=>{
+      document.querySelectorAll('.shape-opt').forEach(o=>o.classList.remove('active'));
+      opt.classList.add('active');
+      myShape = opt.dataset.shape;
+      await sb.from('profiles').update({ shape:myShape }).eq('id', myProfile.id);
+      const icon = makeIcon(myProfile.nickname,'🙂',myShape);
+      myMarker.setIcon(icon);
+      toast('✅ Forma actualizada');
+    });
+  });
+
+  // Pause
+  document.getElementById('pauseToggle').addEventListener('change', function(){
+    locationPaused=this.checked;
+    toast(locationPaused?'⏸ Ubicación pausada':'▶ Ubicación activa');
+  });
+
+  // Trail
+  document.getElementById('trailToggle').addEventListener('change', function(){
+    showTrail=this.checked;
+    if(!showTrail){ myTrailSegs.forEach(s=>map.removeLayer(s)); myTrailSegs.length=0; myTrailPos=[]; }
+    toast(showTrail?'🔵 Estela activada':'Estela ocultada');
+  });
+
+  // GPS / Manual
+  document.getElementById('gpsBtn').addEventListener('click',()=>setMode('gps'));
+  document.getElementById('manualBtn').addEventListener('click',()=>setMode('manual'));
+}
+
+function setMode(mode) {
+  manualMode=(mode==='manual');
+  document.getElementById('gpsBtn').classList.toggle('active',!manualMode);
+  document.getElementById('manualBtn').classList.toggle('active',manualMode);
+  if(manualMode){
+    myMarker.dragging.enable();
+    myMarker.on('dragend', e=>{
+      const ll=e.target.getLatLng();
+      myPosition={ lat:round(ll.lat), lng:round(ll.lng) };
+    });
+    toast('📌 Modo manual activado — arrastra tu punto');
+  } else {
+    myMarker.dragging.disable();
+    myMarker.off('dragend');
+    toast('📍 Modo GPS activado');
+  }
+}
+
+// ── Ranking ──
+function setupRanking() {
+  let rankOpen=true;
+  document.getElementById('rankingHeader').addEventListener('click',()=>{
+    rankOpen=!rankOpen;
+    document.getElementById('rankingBody').style.display=rankOpen?'':'none';
+    document.getElementById('rankToggle').textContent=rankOpen?'▾':'▸';
+  });
+  loadRanking();
+  setInterval(loadRanking, RANK_INT);
+}
+
+async function loadRanking() {
+  const { data } = await sb.rpc('get_top_users',{ lim:10 });
+  const el=document.getElementById('rankingBody');
+  if(!data?.length){ el.innerHTML='<div class="rank-empty">Aún sin reacciones 💛</div>'; return; }
+  el.innerHTML=data.map((u,i)=>`
+    <div class="rank-row ${i===0?'rank-first':''}">
+      <span class="rank-pos">${i===0?'👑':i+1}</span>
+      <span class="rank-nick">${esc(u.nickname)}</span>
+      <span class="rank-count">💛 ${u.reactions_received}</span>
+    </div>`).join('');
+}
+
+// ── Mini-profile ──
+function setupMiniProfile() {
+  document.getElementById('miniDmBtn').addEventListener('click',()=>{
+    if(miniUserId) openDmFromProfile(miniUserId, document.getElementById('miniNick').textContent);
+  });
+
+  document.getElementById('miniReactBtn').addEventListener('click',()=>{
+    closeAllPickers();
+    document.getElementById('reactionPicker').classList.toggle('hidden');
+  });
+  document.getElementById('miniFavBtn').addEventListener('click',()=> toggleFavorite(miniUserId));
+  document.getElementById('miniReportBtn').addEventListener('click',()=>{
+    closeAllPickers();
+    document.getElementById('reportPicker').classList.toggle('hidden');
+  });
+  document.getElementById('miniBlockBtn').addEventListener('click',()=>{
+    closeAllPickers();
+    document.getElementById('blockPicker').classList.toggle('hidden');
+  });
+
+  // Reaction options
+  document.querySelectorAll('.reaction-opt').forEach(opt=>{
+    opt.addEventListener('click',()=>{ reactToUser(miniUserId, opt.dataset.emoji); closeAllPickers(); });
+  });
+
+  // Report options
+  document.querySelectorAll('.report-opt').forEach(opt=>{
+    opt.addEventListener('click',()=>{ reportUser(miniUserId, opt.dataset.type); closeAllPickers(); });
+  });
+
+  // Block options
+  document.querySelectorAll('.block-opt').forEach(opt=>{
+    opt.addEventListener('click',()=>{ blockUser(miniUserId, opt.dataset.hide==='true'); closeAllPickers(); });
+  });
+}
+
+async function showMiniProfile(userId) {
+  if(userId===myProfile.id) return;
+  miniUserId=userId;
+  closeAllPickers();
+
+  const user=otherUsers[userId];
+  if(!user) return;
+
+  const { data: profile } = await sb.from('profiles')
+    .select('*, profile_counters(*)').eq('id',userId).maybeSingle();
+  if(!profile) return;
+
+  document.getElementById('miniAvatar').textContent='🙂';
+  document.getElementById('miniNick').textContent=profile.nickname;
+  document.getElementById('miniReactCount').textContent=`💛 ${profile.profile_counters?.reactions_received||0} reacciones`;
+  document.getElementById('miniBadges').innerHTML=calcBadges(profile).map(b=>`<span class="mini-badge">${b}</span>`).join('');
+  document.getElementById('miniTiktok').innerHTML=profile.tiktok_link
+    ?`<a href="${esc(profile.tiktok_link)}" target="_blank">🎵 Ver TikTok</a>`:'';
+  document.getElementById('miniFavBtn').textContent=myFavorites.has(userId)?'⭐ Quitar favorito':'⭐ Favorito';
+  document.getElementById('miniReactBtn').textContent=myReactions[userId]?`${myReactions[userId]} Cambiar`:'❤️ Reaccionar';
+  document.getElementById('miniProfileCard').classList.remove('hidden');
+}
+
+function hideMiniProfile() {
+  document.getElementById('miniProfileCard').classList.add('hidden');
+  closeAllPickers();
+  miniUserId=null;
+}
+
+function closeAllPickers() {
+  ['reactionPicker','reportPicker','blockPicker'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+}
+
+function calcBadges(profile) {
+  const badges=[], c=profile.profile_counters;
+  const days=profile.created_at?Math.floor((Date.now()-new Date(profile.created_at))/86400000):0;
+  if(days>=365) badges.push('🥇 1 año'); else if(days>=180) badges.push('🥈 6 meses'); else if(days>=30) badges.push('🥉 1 mes'); else if(days>=7) badges.push('🆕 1 semana');
+  if(c?.reactions_received>=500) badges.push('💛 500 ✨'); else if(c?.reactions_received>=100) badges.push('💛 100'); else if(c?.reactions_received>=10) badges.push('💛 10');
+  if(c?.messages_sent>=100) badges.push('💬 100 msgs');
+  if(c?.meeting_points_created>=5) badges.push('📍 Anfitrión');
+  return badges;
+}
+
+// ── Social actions ──
+async function toggleFavorite(userId) {
+  const isFav=myFavorites.has(userId);
+  if(isFav){ await sb.from('favorites').delete().eq('user_id',myProfile.id).eq('favorite_id',userId); myFavorites.delete(userId); }
+  else      { await sb.from('favorites').insert({ user_id:myProfile.id, favorite_id:userId }); myFavorites.add(userId); }
+  document.getElementById('miniFavBtn').textContent=myFavorites.has(userId)?'⭐ Quitar favorito':'⭐ Favorito';
+  toast(isFav?'Eliminado de favoritos':'⭐ Agregado a favoritos');
+}
+
+async function reactToUser(userId, emoji) {
+  if(myReactions[userId]) await sb.from('reactions').delete().eq('reactor_id',myProfile.id).eq('target_id',userId);
+  if(myReactions[userId]!==emoji){
+    await sb.from('reactions').insert({ reactor_id:myProfile.id, target_id:userId, emoji });
+    myReactions[userId]=emoji;
+  } else { delete myReactions[userId]; }
+  document.getElementById('miniReactBtn').textContent=myReactions[userId]?`${myReactions[userId]} Cambiar`:'❤️ Reaccionar';
+  if(myReactions[userId]) toast(`${emoji} Reacción enviada`);
+}
+
+async function reportUser(userId, reportType) {
+  await sb.from('reports').insert({ reporter_id:myProfile.id, reported_id:userId, report_type:reportType, content_snapshot:`Reporte de tipo: ${reportType}` });
+  toast('✅ Reporte enviado al admin');
+  hideMiniProfile();
+}
+
+async function blockUser(userId, hideFromMap) {
+  await sb.from('blocks').insert({ blocker_id:myProfile.id, blocked_id:userId, hide_from_map:hideFromMap });
+  if(hideFromMap){ myBlocks.add(userId); removeUser(userId); }
+  toast(hideFromMap?'🚫 Bloqueado y ocultado del mapa':'🔇 Interacción bloqueada');
+  hideMiniProfile();
+}
+
+// ══════════════════════════════════════════════
+//  REALTIME
+// ══════════════════════════════════════════════
+function startRealtime(profile) {
+  channel = sb.channel('rumbi-map-v1',{ config:{ broadcast:{ self:false }, presence:{ key:profile.id } } });
+  channel.on('broadcast',{ event:'position' },({ payload })=>handlePosition(payload));
+  channel.on('broadcast',{ event:'chat'     },({ payload })=>handleIncomingChat(payload));
+  channel.on('broadcast',{ event:'dm'       },({ payload })=>{ if(payload.to===profile.id) handleIncomingDm(payload); });
+  channel.on('presence', { event:'sync'     },()=>{
+    const state=channel.presenceState();
+    document.getElementById('connectedCount').textContent='● '+Object.keys(state).length;
+    Object.values(state).forEach(entries=>entries.forEach(e=>{ if(e.userId!==profile.id) connectedUsers[e.userId]=e.nickname; }));
+  });
+  channel.on('presence',{ event:'leave' },({ leftPresences })=>{ leftPresences.forEach(p=>{ removeUser(p.userId); delete connectedUsers[p.userId]; }); });
+
+  // Admin kick listener
+  const adminCh=sb.channel('rumbi-admin-v1');
+  adminCh.on('broadcast',{ event:'kick' },({ payload })=>{
+    if(payload.userId===profile.id){
+      alert('Has sido desconectado por un administrador.');
+      channel.unsubscribe(); adminCh.unsubscribe();
+      sb.auth.signOut().then(()=>window.location.reload());
+    }
+  });
+  adminCh.subscribe();
+
+  channel.subscribe(async status=>{
+    if(status!=='SUBSCRIBED') return;
+    await channel.track({ userId:profile.id, nickname:profile.nickname });
+    setInterval(()=>{
+      if(!myPosition||locationPaused) return;
+      channel.send({ type:'broadcast', event:'position', payload:{ userId:profile.id, nickname:profile.nickname, emoji:'🙂', shape:myShape, lat:myPosition.lat, lng:myPosition.lng } });
+    }, POS_INT);
+  });
+}
+
+function handlePosition({ userId, nickname, emoji, shape, lat, lng }) {
+  if(myBlocks.has(userId)) return; // blocked & hidden
+  if(!otherUsers[userId]){
+    const marker=L.marker([lat,lng],{ icon:makeIcon(nickname,emoji||'🙂',shape||'circle') }).addTo(map);
+    marker.on('click',e=>{ L.DomEvent.stopPropagation(e); showMiniProfile(userId); });
+    otherUsers[userId]={ marker, nickname, emoji, shape, trailPos:[], trailSegs:[] };
+  } else {
+    const u=otherUsers[userId];
+    u.marker.setLatLng([lat,lng]);
+    u.trailPos.push([lat,lng]); if(u.trailPos.length>TRAIL_MAX) u.trailPos.shift();
+    drawTrail(u.trailPos, u.trailSegs);
+  }
+}
+
+function handleIncomingChat({ userId, nickname, message }) {
+  if(myBlocks.has(userId)) return;
+  if(otherUsers[userId]) addBubble(otherUsers[userId].marker, userId, message);
+  addToChatPanel(nickname, message, false);
+}
+
+function removeUser(userId) {
+  const u=otherUsers[userId]; if(!u) return;
+  map.removeLayer(u.marker); u.trailSegs.forEach(s=>map.removeLayer(s));
+  delete otherUsers[userId]; delete bubbleQueues[userId];
+  if(miniUserId===userId) hideMiniProfile();
+}
+
+// ── Bubbles ──
+function addBubble(marker, key, message) {
+  if(!bubbleQueues[key]) bubbleQueues[key]=[];
+  const q=bubbleQueues[key]; q.push(message); if(q.length>BUBBLE_MAX) q.shift();
+  renderBubbles(marker, q);
+  setTimeout(()=>{ const i=q.indexOf(message); if(i>-1) q.splice(i,1); renderBubbles(marker,q); }, BUBBLE_DUR);
+}
+function renderBubbles(marker, queue) {
+  if(!queue.length){ if(marker.getTooltip()) marker.unbindTooltip(); return; }
+  const html=queue.map(m=>`<div class="bubble-line">${esc(m)}</div>`).join('');
+  if(marker.getTooltip()) marker.getTooltip().setContent(html);
+  else marker.bindTooltip(html,{ permanent:true, direction:'top', className:'chat-bubble-tt', offset:[0,-10] }).openTooltip();
+}
+
+// ── Trail ──
+function drawTrail(pos, segs) {
+  segs.forEach(s=>map.removeLayer(s)); segs.length=0;
+  for(let i=1;i<pos.length;i++){
+    const op=(i/pos.length)*.55;
+    segs.push(L.polyline([pos[i-1],pos[i]],{ color:'#2F80ED', weight:3, opacity:op }).addTo(map));
+  }
+}
+
+// ── Chat panel ──
+function addToChatPanel(nickname, message, isMe) {
+  const time=new Date().toLocaleTimeString('es-PE',{ hour:'2-digit', minute:'2-digit' });
+  const makeDiv = () => {
+    const div=document.createElement('div'); div.className='chat-msg'+(isMe?' mine':'');
+    div.innerHTML=isMe
+      ?`${esc(message)} <span class="chat-ts">${time}</span>`
+      :`<span class="chat-nick">${esc(nickname)}</span>: ${esc(message)} <span class="chat-ts">${time}</span>`;
+    return div;
+  };
+  // Desktop panel
+  const body=document.getElementById('chatBody');
+  body.appendChild(makeDiv()); body.scrollTop=body.scrollHeight;
+  // Mobile sheet panel
+  const bodyM=document.getElementById('chatBodyMobile');
+  bodyM.appendChild(makeDiv()); bodyM.scrollTop=bodyM.scrollHeight;
+}
+
+// ── Helpers ──
+function makeIcon(nickname, emoji, shape='circle') {
+  const isDiamond=shape==='diamond';
+  const shapeStyle={circle:'border-radius:50%;',square:'border-radius:6px;',diamond:'border-radius:6px;transform:rotate(45deg);',star:'border-radius:50%;'}[shape]||'border-radius:50%;';
+  const inner=isDiamond?`<span class="inner">${emoji}</span>`:emoji;
+  return L.divIcon({ className:'', html:`<div class="marker-wrap"><div class="glow-shape" style="${shapeStyle}">${inner}</div><div class="nickname-tag">${esc(nickname)}</div></div>`, iconSize:[60,60], iconAnchor:[30,20] });
+}
+
+function round(v, step=0.00025){ return Math.round(v/step)*step; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg){ const n=document.createElement('div'); n.className='toast'; n.textContent=msg; document.body.appendChild(n); setTimeout(()=>n.remove(),3000); }
+
+// ── Bottom sheets (mobile) ──
+function openSheet(id) {
+  closeAllSheets();
+  document.getElementById(id).classList.add('open');
+  document.getElementById('sheetOverlay').classList.add('active');
+  if(id==='sheetRanking') loadRankingMobile();
+}
+function closeSheet(id) {
+  document.getElementById(id).classList.remove('open');
+  document.getElementById('sheetOverlay').classList.remove('active');
+}
+function closeAllSheets() {
+  ['sheetRanking','sheetProfile','sheetChat','sheetSearch','sheetDm'].forEach(id=>document.getElementById(id)?.classList.remove('open'));
+  document.getElementById('sheetOverlay').classList.remove('active');
+}
+
+async function loadRankingMobile() {
+  const { data } = await sb.rpc('get_top_users',{ lim:10 });
+  const el=document.getElementById('rankingBodyMobile');
+  if(!data?.length){ el.innerHTML='<div class="rank-empty">Aún sin reacciones 💛</div>'; return; }
+  el.innerHTML=data.map((u,i)=>`
+    <div class="rank-row ${i===0?'rank-first':''}">
+      <span class="rank-pos">${i===0?'👑':i+1}</span>
+      <span class="rank-nick">${esc(u.nickname)}</span>
+      <span class="rank-count">💛 ${u.reactions_received}</span>
+    </div>`).join('');
+}
+
+function setupMobileToolbar(profile) {
+  document.getElementById('mobileRankBtn').addEventListener('click',()=>openSheet('sheetRanking'));
+  document.getElementById('mobileChatBtn').addEventListener('click',()=>openSheet('sheetChat'));
+  document.getElementById('mobileProfileBtn').addEventListener('click',()=>openSheet('sheetProfile'));
+  document.getElementById('mobileSearchBtn').addEventListener('click',()=>openSheet('sheetSearch'));
+  document.getElementById('mobileDmBtn').addEventListener('click',()=>{ openSheet('sheetDm'); loadDmList(); });
+  document.getElementById('sheetOverlay').addEventListener('click', closeAllSheets);
+
+  // Sync mobile profile info
+  document.getElementById('tabAvatarMobile').textContent='🙂';
+  document.getElementById('tabNickMobile').textContent=profile.nickname;
+  document.querySelector(`#shapeGridMobile [data-shape="${myShape}"]`)?.classList.add('active');
+
+  // Shape (mobile)
+  document.querySelectorAll('#shapeGridMobile .shape-opt').forEach(opt=>{
+    opt.addEventListener('click', async()=>{
+      document.querySelectorAll('#shapeGridMobile .shape-opt').forEach(o=>o.classList.remove('active'));
+      // Sync desktop too
+      document.querySelectorAll('#shapeGrid .shape-opt').forEach(o=>o.classList.remove('active'));
+      opt.classList.add('active');
+      document.querySelector(`#shapeGrid [data-shape="${opt.dataset.shape}"]`)?.classList.add('active');
+      myShape=opt.dataset.shape;
+      await sb.from('profiles').update({ shape:myShape }).eq('id', myProfile.id);
+      myMarker.setIcon(makeIcon(myProfile.nickname,'🙂',myShape));
+      toast('✅ Forma actualizada');
+    });
+  });
+
+  // Pause (mobile)
+  document.getElementById('pauseToggleM').addEventListener('change', function(){
+    locationPaused=this.checked;
+    document.getElementById('pauseToggle').checked=this.checked;
+    toast(locationPaused?'⏸ Ubicación pausada':'▶ Ubicación activa');
+  });
+
+  // Trail (mobile)
+  document.getElementById('trailToggleM').addEventListener('change', function(){
+    showTrail=this.checked;
+    document.getElementById('trailToggle').checked=this.checked;
+    if(!showTrail){ myTrailSegs.forEach(s=>map.removeLayer(s)); myTrailSegs.length=0; myTrailPos=[]; }
+    toast(showTrail?'🔵 Estela activada':'Estela ocultada');
+  });
+
+  // GPS/Manual (mobile)
+  document.getElementById('gpsBtnM').addEventListener('click',()=>{
+    setMode('gps');
+    document.getElementById('gpsBtnM').classList.add('active');
+    document.getElementById('manualBtnM').classList.remove('active');
+  });
+  document.getElementById('manualBtnM').addEventListener('click',()=>{
+    setMode('manual');
+    document.getElementById('gpsBtnM').classList.remove('active');
+    document.getElementById('manualBtnM').classList.add('active');
+  });
+}
+
+// ══════════════════════════════════════════════
+//  BÚSQUEDA
+// ══════════════════════════════════════════════
+const connectedUsers = {}; // userId → nickname
+
+function setupSearch() {
+  const input = document.getElementById('searchInput');
+  if (input) input.addEventListener('input', ()=>renderSearch(input.value, 'searchResults', false));
+  const inputM = document.getElementById('searchInputM');
+  if (inputM) inputM.addEventListener('input', ()=>renderSearch(inputM.value, 'searchResultsM', true));
+}
+
+function renderSearch(query, containerId, isMobile) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const q = query.toLowerCase();
+  const results = Object.entries(connectedUsers)
+    .filter(([id, nick]) => nick.toLowerCase().includes(q) && id !== myProfile?.id)
+    .slice(0, 15);
+  if (!results.length) { el.innerHTML='<div style="opacity:.4;font-size:13px;padding:16px;text-align:center;color:#22252B;">Sin resultados</div>'; return; }
+  el.innerHTML = results.map(([id, nick]) =>
+    `<div class="search-result" onclick="goToUser('${id}',${isMobile})">
+      <span class="online-dot"></span>
+      <span>${esc(nick)}</span>
+    </div>`).join('');
+}
+
+function goToUser(userId, isMobile) {
+  const u = otherUsers[userId];
+  if (!u) { toast('Usuario no visible en el mapa aún'); return; }
+  map.setView(u.marker.getLatLng(), 17);
+  if (isMobile) closeSheet('sheetSearch');
+  toast(`📍 Centrado en ${esc(connectedUsers[userId]||'')}`);
+}
+
+// ══════════════════════════════════════════════
+//  MENSAJES PRIVADOS (DMs)
+// ══════════════════════════════════════════════
+let activeDmId = null;
+const dmPartnerNicks = {}; // partnerId → nickname
+
+function setupDms() {
+  document.getElementById('dmSendBtn')?.addEventListener('click', ()=>sendDm('dmInput'));
+  document.getElementById('dmInput')?.addEventListener('keydown', e=>{ if(e.key==='Enter') sendDm('dmInput'); });
+  document.getElementById('dmSendBtnM')?.addEventListener('click', ()=>sendDm('dmInputM'));
+  document.getElementById('dmInputM')?.addEventListener('keydown', e=>{ if(e.key==='Enter') sendDm('dmInputM'); });
+}
+
+async function loadDmList() {
+  const { data } = await sb.rpc('get_dm_conversations', { uid: myProfile.id });
+  renderDmList(data || [], 'dmList');
+  renderDmList(data || [], 'dmSheetList');
+}
+
+async function renderDmList(convos, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!convos.length) { el.innerHTML='<div style="opacity:.4;font-size:13px;padding:20px;text-align:center;color:#22252B;">Sin conversaciones aún</div>'; return; }
+  // Fetch partner nicknames
+  const ids = convos.map(c=>c.partner_id);
+  const { data: profiles } = await sb.from('profiles').select('id,nickname').in('id', ids);
+  profiles?.forEach(p=>{ dmPartnerNicks[p.id]=p.nickname; });
+  el.innerHTML = convos.map(c=>`
+    <div class="dm-convo-item" onclick="openDmConvo('${c.partner_id}')">
+      <div style="display:flex;justify-content:space-between;">
+        <span class="dm-convo-nick">${esc(dmPartnerNicks[c.partner_id]||'Usuario')}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;opacity:.4;color:#22252B;">${new Date(c.last_ts).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+      <span class="dm-convo-preview">${esc(c.last_message||'')}</span>
+    </div>`).join('');
+}
+
+async function openDmConvo(partnerId, partnerNick) {
+  activeDmId = partnerId;
+  const nick = partnerNick || dmPartnerNicks[partnerId] || 'Usuario';
+  dmPartnerNicks[partnerId] = nick;
+
+  // Desktop
+  document.getElementById('dmConvoName').textContent = nick;
+  document.getElementById('dmList').classList.add('hidden');
+  document.getElementById('dmConvo').classList.remove('hidden');
+  document.querySelector('[data-tab="dm"]')?.click();
+
+  // Mobile
+  document.getElementById('dmSheetList').classList.add('hidden');
+  document.getElementById('dmSheetConvo').classList.remove('hidden');
+  document.getElementById('dmSheetHeader').querySelector('h3').innerHTML = `← <span onclick="closeDmConvoM()" style="cursor:pointer;opacity:.7;font-size:14px;">Mensajes</span> / <span style="font-size:14px;">${esc(nick)}</span>`;
+
+  await loadDmMessages(partnerId);
+}
+
+async function loadDmMessages(partnerId) {
+  const { data: msgs } = await sb.rpc('get_dm_conversation', { user1: myProfile.id, user2: partnerId });
+  renderDmMessages(msgs || [], 'dmMessages');
+  renderDmMessages(msgs || [], 'dmSheetMessages');
+}
+
+function renderDmMessages(msgs, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = msgs.map(m=>{
+    const isMe = m.sender_id === myProfile.id;
+    const time = new Date(m.created_at).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="dm-msg ${isMe?'mine':'theirs'}">${esc(m.content)} <span style="font-size:9px;opacity:.5;margin-left:4px;">${time}</span></div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendDm(inputId) {
+  const input = document.getElementById(inputId);
+  const text = input?.value.trim();
+  if (!text || !activeDmId) return;
+  input.value = '';
+  const msg = filterBadWords(text);
+  // Guardar en DB
+  const { data, error } = await sb.from('dm_messages').insert({
+    sender_id: myProfile.id, recipient_id: activeDmId, content: msg
+  }).select().single();
+  if (error) { toast('Error al enviar mensaje'); return; }
+  // Broadcast para entrega en tiempo real
+  channel.send({ type:'broadcast', event:'dm', payload:{ from:myProfile.id, to:activeDmId, message:msg, ts:data.created_at } });
+  // Mostrar en UI
+  appendDmMessage(msg, true, data.created_at);
+}
+
+function appendDmMessage(text, isMe, ts) {
+  const time = new Date(ts||Date.now()).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+  const html = `<div class="dm-msg ${isMe?'mine':'theirs'}">${esc(text)} <span style="font-size:9px;opacity:.5;margin-left:4px;">${time}</span></div>`;
+  ['dmMessages','dmSheetMessages'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.insertAdjacentHTML('beforeend', html); el.scrollTop=el.scrollHeight;
+  });
+}
+
+function handleIncomingDm({ from, message, ts }) {
+  // Notificación si es de alguien más y no tenemos la convo abierta
+  const nick = dmPartnerNicks[from] || connectedUsers[from] || 'Alguien';
+  if (activeDmId !== from) {
+    toast(`✉️ ${nick}: ${message.substring(0,30)}${message.length>30?'…':''}`);
+    dmPartnerNicks[from] = nick;
+    loadDmList();
+  } else {
+    appendDmMessage(message, false, ts);
+  }
+}
+
+function closeDmConvo() {
+  document.getElementById('dmList').classList.remove('hidden');
+  document.getElementById('dmConvo').classList.add('hidden');
+  activeDmId = null;
+}
+function closeDmConvoM() {
+  document.getElementById('dmSheetList').classList.remove('hidden');
+  document.getElementById('dmSheetConvo').classList.add('hidden');
+  activeDmId = null;
+}
+
+// Abrir DM desde mini-perfil
+function openDmFromProfile(userId, nickname) {
+  dmPartnerNicks[userId] = nickname;
+  openDmConvo(userId, nickname);
+  hideMiniProfile();
+  closeAllSheets();
+  // Desktop: switch to DM tab
+  document.querySelector('[data-tab="dm"]')?.click();
+}
+
+// ══════════════════════════════════════════════
+//  PUNTOS DE ENCUENTRO
+// ══════════════════════════════════════════════
+const meetingPins = {}; // pinId → { marker }
+
+async function loadMeetingPoints() {
+  const { data: pins } = await sb.from('meeting_points').select('*').gt('expires_at', new Date().toISOString());
+  pins?.forEach(pin => addPinToMap(pin));
+  renderMyPins(pins?.filter(p=>p.creator_id===myProfile.id)||[]);
+}
+
+function addPinToMap(pin) {
+  if (meetingPins[pin.id]) return;
+  const isHighlighted = pin.pin_type === 'destacado';
+  const icon = L.divIcon({
+    className:'',
+    html:`<div class="pin-wrap">
+      <div class="pin-icon">${isHighlighted?'⭐':'📍'}</div>
+      <div class="pin-label">${esc(pin.message||'')}</div>
+    </div>`,
+    iconSize:[60,40], iconAnchor:[30,40]
+  });
+  const marker = L.marker([pin.lat, pin.lng], { icon }).addTo(map);
+  const expiresIn = Math.round((new Date(pin.expires_at)-Date.now())/3600000);
+  marker.bindPopup(`<b>${isHighlighted?'⭐ Destacado':'📍 Encuentro'}</b><br>${esc(pin.message||'Sin mensaje')}<br><small>Expira en ~${expiresIn}h</small>`);
+  meetingPins[pin.id] = { marker };
+}
+
+function removePinFromMap(pinId) {
+  if (!meetingPins[pinId]) return;
+  map.removeLayer(meetingPins[pinId].marker);
+  delete meetingPins[pinId];
+}
+
+function renderMyPins(pins) {
+  const el = document.getElementById('myPinsList');
+  if (!el) return;
+  if (!pins.length) { el.innerHTML=''; return; }
+  el.innerHTML = pins.map(p=>`
+    <div class="my-pin-item">
+      <span>${p.pin_type==='destacado'?'⭐':'📍'}</span>
+      <span style="flex:1;">${esc(p.message||'Sin mensaje')}</span>
+      <button class="my-pin-del" onclick="deletePin('${p.id}')">🗑</button>
+    </div>`).join('');
+}
+
+function openPinModal() {
+  if (!myPosition) { toast('Activa el GPS para colocar un punto en tu posición'); return; }
+  document.getElementById('pinMessage').value='';
+  document.querySelector('input[name="pinType"][value="normal"]').checked=true;
+  document.getElementById('pinModal').classList.remove('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('pinCreateBtn')?.addEventListener('click', createPin);
+});
+
+async function createPin() {
+  if (!myPosition) return;
+  const message = document.getElementById('pinMessage').value.trim();
+  const pinType = document.querySelector('input[name="pinType"]:checked')?.value || 'normal';
+  const hours = pinType==='destacado'?168:24;
+  const expiresAt = new Date(Date.now()+hours*3600000).toISOString();
+
+  // Verificar límite de pines
+  const { data: myPins } = await sb.from('meeting_points').select('id,pin_type').eq('creator_id', myProfile.id).gt('expires_at', new Date().toISOString());
+  const { data: config } = await sb.from('app_config').select('value').eq('key','max_meeting_pins').single();
+  const maxPins = parseInt(config?.value||'5');
+  if ((myPins||[]).length >= maxPins) { toast(`Máximo ${maxPins} pines activos permitidos`); return; }
+  if (pinType==='destacado' && (myPins||[]).some(p=>p.pin_type==='destacado')) {
+    toast('Ya tienes un pin destacado activo — bórralo primero'); return;
+  }
+
+  const { data: pin, error } = await sb.from('meeting_points').insert({
+    creator_id: myProfile.id, lat: myPosition.lat, lng: myPosition.lng,
+    message: filterBadWords(message), pin_type: pinType, expires_at: expiresAt
+  }).select().single();
+
+  if (error) { toast('Error al crear el pin'); return; }
+  document.getElementById('pinModal').classList.add('hidden');
+  toast(`📍 Pin creado — expira en ${pinType==='destacado'?'7 días':'24 horas'}`);
+}
+
+async function deletePin(pinId) {
+  await sb.from('meeting_points').delete().eq('id', pinId);
+  removePinFromMap(pinId);
+  const { data: myPins } = await sb.from('meeting_points').select('*').eq('creator_id', myProfile.id).gt('expires_at', new Date().toISOString());
+  renderMyPins(myPins||[]);
+  toast('Pin eliminado');
+}
+
+function setupMeetingPointsRealtime() {
+  sb.channel('rumbi-pins')
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'meeting_points' }, payload=>addPinToMap(payload.new))
+    .on('postgres_changes', { event:'DELETE',  schema:'public', table:'meeting_points' }, payload=>removePinFromMap(payload.old.id))
+    .subscribe();
+}
+
+init();
+</script>
+</body>
+</html>

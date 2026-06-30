@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rumbi — Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+*{ box-sizing:border-box; }
+body{ margin:0; font-family:'Inter',sans-serif; background:#F0F2F5; color:#22252B; }
+
+.screen{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#1B2240; }
+.card{ background:#F6F7FB; border:2px solid #2F80ED; border-radius:18px; padding:28px; max-width:320px; width:90%; text-align:center; }
+.card h1{ font-family:'Fredoka',sans-serif; color:#2F80ED; margin:0 0 8px; }
+.card p{ font-size:13px; opacity:.7; margin-bottom:20px; }
+.btn-main{ background:#2F80ED; color:#fff; border:none; padding:12px 20px; border-radius:999px; font-weight:600; font-size:14px; cursor:pointer; width:100%; }
+.hidden{ display:none !important; }
+
+/* Layout */
+.admin-layout{ display:flex; min-height:100vh; }
+
+/* Sidebar */
+.sidebar{ width:230px; background:#1B2240; color:#fff; display:flex; flex-direction:column; flex-shrink:0; min-height:100vh; }
+.sidebar-logo{ padding:20px; font-family:'Fredoka',sans-serif; font-size:20px; border-bottom:1px solid rgba(255,255,255,.1); }
+.sidebar-logo span{ color:#2F80ED; }
+.sidebar-nav{ flex:1; padding:12px 0; }
+.nav-item{ display:flex; align-items:center; gap:10px; padding:11px 20px; cursor:pointer; font-size:13px; transition:.15s; border-left:3px solid transparent; }
+.nav-item:hover{ background:rgba(255,255,255,.07); }
+.nav-item.active{ background:rgba(47,128,237,.2); border-left-color:#2F80ED; color:#2F80ED; }
+.sidebar-footer{ padding:16px; border-top:1px solid rgba(255,255,255,.1); font-size:12px; }
+.level-badge{ display:inline-block; background:#2F80ED; color:#fff; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:600; margin-left:6px; }
+.btn-logout{ margin-top:8px; background:rgba(255,255,255,.1); border:none; color:#fff; padding:7px 14px; border-radius:8px; cursor:pointer; font-size:12px; width:100%; }
+
+/* Main */
+.main-content{ flex:1; overflow:auto; }
+.section-header{ background:#fff; padding:20px 28px; border-bottom:1px solid #e0e0e0; }
+.section-header h2{ margin:0; font-family:'Fredoka',sans-serif; font-size:20px; color:#2F80ED; }
+.section-header p{ margin:4px 0 0; font-size:13px; opacity:.6; }
+.content-area{ padding:24px 28px; }
+.card-white{ background:#fff; border-radius:14px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,.06); margin-bottom:16px; }
+.card-white h3{ margin-top:0; font-family:'Fredoka',sans-serif; color:#1B2240; }
+
+/* Photo queue */
+.photo-queue-wrap{ display:flex; flex-direction:column; align-items:center; gap:20px; max-width:400px; margin:0 auto; text-align:center; }
+.photo-preview{ width:200px; height:200px; border-radius:50%; object-fit:cover; border:3px solid #2F80ED; background:#eee; display:flex; align-items:center; justify-content:center; font-size:80px; }
+.photo-nickname{ font-family:'Fredoka',sans-serif; font-size:22px; color:#2F80ED; }
+.photo-actions{ display:flex; gap:14px; }
+.btn-approve{ background:#2EC4B6; color:#fff; border:none; padding:13px 30px; border-radius:999px; font-weight:700; font-size:15px; cursor:pointer; }
+.btn-reject{ background:#E03131; color:#fff; border:none; padding:13px 30px; border-radius:999px; font-weight:700; font-size:15px; cursor:pointer; }
+.queue-counter{ font-family:'JetBrains Mono',monospace; font-size:12px; opacity:.6; background:#F6F7FB; padding:4px 12px; border-radius:999px; }
+.empty-state{ text-align:center; opacity:.4; padding:40px 0; font-size:14px; }
+
+/* Tables */
+table{ width:100%; border-collapse:collapse; font-size:13px; }
+th{ text-align:left; padding:10px 12px; background:#F6F7FB; color:#888; font-weight:600; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e0e0e0; }
+td{ padding:10px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+tr:last-child td{ border-bottom:none; }
+tr:hover td{ background:#fafafa; }
+.mono{ font-family:'JetBrains Mono',monospace; font-size:11px; }
+
+/* Badges */
+.badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+.badge-active{ background:#E8F5E9; color:#2E7D32; }
+.badge-muted{ background:#FFF3E0; color:#E65100; }
+.badge-banned{ background:#FFEBEE; color:#C62828; }
+.badge-pending{ background:#EDE7F6; color:#4527A0; }
+.badge-1{ background:rgba(47,128,237,.15); color:#1C64E0; }
+.badge-2{ background:rgba(255,201,60,.25); color:#9A6000; }
+.badge-3{ background:rgba(255,80,80,.15); color:#C00; }
+
+/* Action buttons */
+.btn-sm{ border:none; padding:5px 10px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600; margin:2px; }
+.btn-mute{ background:#FFF3E0; color:#E65100; }
+.btn-kick{ background:#E3F2FD; color:#1565C0; }
+.btn-ban{ background:#FFEBEE; color:#C62828; }
+.btn-unban{ background:#E8F5E9; color:#2E7D32; }
+.btn-history{ background:#F3E5F5; color:#6A1B9A; }
+
+/* Search */
+.search-bar{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.search-bar input{ flex:1; min-width:160px; padding:9px 14px; border-radius:999px; border:1px solid #ddd; font-size:13px; font-family:'Inter',sans-serif; }
+.search-bar select{ padding:9px 14px; border-radius:999px; border:1px solid #ddd; font-size:13px; background:#fff; }
+
+/* Config */
+.config-row{ display:flex; align-items:center; gap:16px; padding:14px 0; border-bottom:1px solid #f0f0f0; flex-wrap:wrap; }
+.config-row:last-child{ border-bottom:none; }
+.config-label{ flex:1; font-size:13px; }
+.config-label strong{ display:block; margin-bottom:2px; }
+.config-label small{ opacity:.6; font-size:11px; }
+.config-input{ width:90px; padding:7px 10px; border-radius:8px; border:1px solid #ddd; font-size:13px; text-align:center; font-family:'JetBrains Mono',monospace; }
+.btn-save{ background:#2F80ED; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+.country-list{ display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+.country-chip{ display:flex; align-items:center; gap:8px; background:#F6F7FB; border:1px solid #ddd; border-radius:999px; padding:6px 14px; font-size:13px; cursor:pointer; }
+.words-list{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.word-chip{ background:#FFEBEE; color:#C62828; border-radius:999px; padding:4px 10px; font-size:12px; display:flex; align-items:center; gap:6px; }
+.word-chip button{ background:none; border:none; cursor:pointer; color:#C62828; font-size:14px; padding:0; line-height:1; }
+.add-word-row{ display:flex; gap:8px; margin-top:12px; }
+.add-word-row input{ flex:1; padding:8px 14px; border-radius:999px; border:1px solid #ddd; font-size:13px; font-family:'Inter',sans-serif; }
+
+/* Modals */
+.modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.modal{ background:#fff; border-radius:16px; padding:24px; max-width:380px; width:90%; }
+.modal h3{ margin:0 0 16px; font-family:'Fredoka',sans-serif; color:#2F80ED; font-size:18px; }
+.mute-options{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+.mute-chip{ background:#F6F7FB; border:2px solid #ddd; border-radius:999px; padding:7px 14px; font-size:13px; cursor:pointer; transition:.1s; }
+.mute-chip.selected{ border-color:#2F80ED; background:rgba(47,128,237,.1); color:#2F80ED; font-weight:600; }
+.mute-custom{ display:flex; gap:8px; align-items:center; font-size:13px; }
+.mute-custom input{ width:75px; padding:7px 10px; border-radius:8px; border:1px solid #ddd; font-size:13px; font-family:'JetBrains Mono',monospace; }
+.modal-actions{ display:flex; gap:10px; margin-top:18px; justify-content:flex-end; }
+.btn-cancel{ background:#F6F7FB; border:1px solid #ddd; padding:9px 18px; border-radius:999px; cursor:pointer; font-size:13px; }
+.btn-confirm{ background:#2F80ED; color:#fff; border:none; padding:9px 18px; border-radius:999px; cursor:pointer; font-size:13px; font-weight:600; }
+.history-item{ display:flex; gap:12px; padding:8px 0; border-bottom:1px solid #f0f0f0; font-size:13px; }
+.history-item:last-child{ border-bottom:none; }
+
+/* Add admin row */
+.add-admin-row{ display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; align-items:center; }
+.add-admin-row input{ flex:1; min-width:160px; padding:9px 14px; border-radius:999px; border:1px solid #ddd; font-size:13px; font-family:'Inter',sans-serif; }
+.add-admin-row select{ padding:9px 14px; border-radius:999px; border:1px solid #ddd; font-size:13px; background:#fff; }
+
+/* Notification */
+.notif{ position:fixed; bottom:24px; right:24px; background:#1B2240; color:#fff; padding:12px 20px; border-radius:12px; font-size:13px; z-index:2000; animation:fadeUp .3s ease; box-shadow:0 4px 16px rgba(0,0,0,.3); }
+@keyframes fadeUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginScreen" class="screen">
+  <div class="card">
+    <h1>Rumbi Admin</h1>
+    <p>Panel de administración — solo para autorizados</p>
+    <button class="btn-main" id="loginBtn">Iniciar sesión con Google</button>
+  </div>
+</div>
+
+<!-- Sin acceso -->
+<div id="noAccessScreen" class="screen hidden">
+  <div class="card">
+    <h1>Sin acceso</h1>
+    <p>Tu cuenta no tiene permisos de administración en Rumbi.</p>
+    <button class="btn-main" id="logoutNoAccess">Volver</button>
+  </div>
+</div>
+
+<!-- Panel admin -->
+<div id="adminPanel" class="admin-layout hidden">
+  <div class="sidebar">
+    <div class="sidebar-logo">Rumbi <span>Admin</span></div>
+    <div class="sidebar-nav">
+      <div class="nav-item active" data-section="photos">📷 Fotos pendientes</div>
+      <div class="nav-item" data-section="reports">🚨 Reportes</div>
+      <div class="nav-item" data-section="users">👥 Usuarios</div>
+      <div class="nav-item level-2" data-section="config">⚙️ Configuración</div>
+      <div class="nav-item level-3" data-section="roles">🛡️ Administradores</div>
+      <div class="nav-item level-3" data-section="log">📋 Registro</div>
+    </div>
+    <div class="sidebar-footer">
+      <div id="adminInfo" style="margin-bottom:8px;font-size:13px;"></div>
+      <button class="btn-logout" id="logoutBtn">Cerrar sesión</button>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+    <!-- Fotos -->
+    <div id="section-photos" class="section">
+      <div class="section-header">
+        <h2>📷 Fotos pendientes</h2>
+        <p>Aprueba o rechaza las fotos de perfil enviadas por usuarios.</p>
+      </div>
+      <div class="content-area">
+        <div class="card-white"><div id="photoQueueContent"></div></div>
+      </div>
+    </div>
+
+    <!-- Reportes -->
+    <div id="section-reports" class="section hidden">
+      <div class="section-header">
+        <h2>🚨 Reportes</h2>
+        <p>Gestiona los reportes de la comunidad.</p>
+      </div>
+      <div class="content-area">
+        <div class="card-white">
+          <div class="search-bar">
+            <select id="reportFilter">
+              <option value="pendiente">Pendientes</option>
+              <option value="resuelto">Resueltos</option>
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div id="reportsTable"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Usuarios -->
+    <div id="section-users" class="section hidden">
+      <div class="section-header">
+        <h2>👥 Usuarios</h2>
+        <p>Busca y gestiona las cuentas de la comunidad.</p>
+      </div>
+      <div class="content-area">
+        <div class="card-white">
+          <div class="search-bar">
+            <input type="text" id="userSearch" placeholder="Buscar por nickname…">
+            <select id="userFilter">
+              <option value="">Todos</option>
+              <option value="muted">Muteados</option>
+              <option value="banned">Baneados</option>
+            </select>
+          </div>
+          <div id="usersTable"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Configuración -->
+    <div id="section-config" class="section hidden">
+      <div class="section-header">
+        <h2>⚙️ Configuración</h2>
+        <p>Ajusta los parámetros generales de Rumbi.</p>
+      </div>
+      <div class="content-area">
+        <div class="card-white"><h3>Parámetros</h3><div id="configRows"></div></div>
+        <div class="card-white"><h3>Países permitidos</h3><div id="countriesList"></div></div>
+        <div class="card-white">
+          <h3>Palabras prohibidas</h3>
+          <div id="wordsList"></div>
+          <div class="add-word-row">
+            <input type="text" id="newWordInput" placeholder="Nueva palabra…">
+            <button class="btn-save" id="addWordBtn">Agregar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admins -->
+    <div id="section-roles" class="section hidden">
+      <div class="section-header">
+        <h2>🛡️ Administradores</h2>
+        <p>Gestiona los niveles de acceso al panel.</p>
+      </div>
+      <div class="content-area">
+        <div class="card-white">
+          <div id="rolesTable"></div>
+          <div class="add-admin-row">
+            <input type="text" id="newAdminNick" placeholder="Nickname del nuevo admin…">
+            <select id="newAdminLevel">
+              <option value="1">Nivel 1 — Básico</option>
+              <option value="2">Nivel 2 — Senior</option>
+            </select>
+            <button class="btn-save" id="addAdminBtn">Agregar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Registro -->
+    <div id="section-log" class="section hidden">
+      <div class="section-header">
+        <h2>📋 Registro de acciones</h2>
+        <p>Historial permanente de todas las acciones de moderación.</p>
+      </div>
+      <div class="content-area">
+        <div class="card-white"><div id="actionLogTable"></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal mute -->
+<div id="muteModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>🔇 Mutear usuario</h3>
+    <p id="muteTargetName" style="font-size:13px;margin-bottom:14px;opacity:.7;"></p>
+    <div class="mute-options">
+      <div class="mute-chip selected" data-mins="10">10 min</div>
+      <div class="mute-chip" data-mins="60">1 hora</div>
+      <div class="mute-chip" data-mins="1440">24 horas</div>
+    </div>
+    <div class="mute-custom">
+      <span>Personalizado:</span>
+      <input type="number" id="muteCustomMins" placeholder="mins" min="1">
+      <span>minutos</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="muteCancelBtn">Cancelar</button>
+      <button class="btn-confirm" id="muteConfirmBtn">Mutear</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal historial -->
+<div id="historyModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="historyTitle">Historial de nicknames</h3>
+    <div id="historyContent" class="history-list"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="historyCloseBtn">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL      = 'https://jfjzpowfgbvblhhtlcya.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impmanpwb3dmZ2J2YmxoaHRsY3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NTkxOTEsImV4cCI6MjA5ODMzNTE5MX0.m0CgHH0GGCbSSftf0h2mWl01ByOgcYHoFIyGPEPBt7M';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let myProfile, myAdminLevel, adminChannel;
+let muteTargetId = null, selectedMuteMins = 10;
+
+function show(id) {
+  ['loginScreen','noAccessScreen','adminPanel'].forEach(s =>
+    document.getElementById(s).classList.toggle('hidden', s !== id)
+  );
+}
+
+async function init() {
+  const { data:{ session } } = await sb.auth.getSession();
+  if (!session) { show('loginScreen'); return; }
+  await routeAdmin(session.user);
+}
+sb.auth.onAuthStateChange((e, session) => { if (e === 'SIGNED_IN' && session) routeAdmin(session.user); });
+
+async function routeAdmin(user) {
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (!profile) { show('noAccessScreen'); return; }
+  const { data: role } = await sb.from('admin_roles').select('*').eq('profile_id', user.id).maybeSingle();
+  if (!role) { show('noAccessScreen'); return; }
+  myProfile = profile; myAdminLevel = role.level;
+  setupPanel();
+}
+
+function setupPanel() {
+  show('adminPanel');
+  const names = {1:'Básico',2:'Senior',3:'Dueño'};
+  document.getElementById('adminInfo').innerHTML =
+    `<strong>${esc(myProfile.nickname)}</strong><span class="level-badge">Nv.${myAdminLevel} ${names[myAdminLevel]}</span>`;
+  document.querySelectorAll('.nav-item.level-2').forEach(el => { if (myAdminLevel < 2) el.style.display = 'none'; });
+  document.querySelectorAll('.nav-item.level-3').forEach(el => { if (myAdminLevel < 3) el.style.display = 'none'; });
+  adminChannel = sb.channel('rumbi-admin-v1').subscribe();
+  setupNav(); setupMuteModal();
+  loadSection('photos');
+}
+
+function setupNav() {
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+      item.classList.add('active');
+      document.getElementById('section-' + item.dataset.section).classList.remove('hidden');
+      loadSection(item.dataset.section);
+    });
+  });
+}
+
+function loadSection(s) {
+  ({photos: loadPhotoQueue, reports: loadReports, users: loadUsers,
+    config: loadConfig, roles: loadRoles, log: loadActionLog})[s]?.();
+}
+
+// ── FOTOS ──
+async function loadPhotoQueue() {
+  const { data: pending } = await sb.from('profiles')
+    .select('id,nickname,avatar_pending').eq('avatar_status','pending').limit(50);
+  const el = document.getElementById('photoQueueContent');
+  if (!pending?.length) { el.innerHTML = '<div class="empty-state">✅ No hay fotos pendientes</div>'; return; }
+  const f = pending[0];
+  el.innerHTML = `<div class="photo-queue-wrap">
+    <div class="queue-counter">${pending.length} foto${pending.length>1?'s':''} pendiente${pending.length>1?'s':''}</div>
+    <img class="photo-preview" src="${esc(f.avatar_pending||'')}" alt="" onerror="this.style.display='none'">
+    <div class="photo-nickname">${esc(f.nickname)}</div>
+    <div class="photo-actions">
+      <button class="btn-approve" onclick="resolvePhoto('${f.id}','approved')">✅ Aprobar</button>
+      <button class="btn-reject"  onclick="resolvePhoto('${f.id}','rejected')">❌ Rechazar</button>
+    </div></div>`;
+}
+
+async function resolvePhoto(id, decision) {
+  const update = decision === 'approved'
+    ? { avatar:(await sb.from('profiles').select('avatar_pending').eq('id',id).single()).data?.avatar_pending, avatar_pending:null, avatar_status:'approved' }
+    : { avatar_pending:null, avatar_status:'rejected' };
+  await sb.from('profiles').update(update).eq('id', id);
+  await logAction(decision==='approved'?'aprobar_avatar':'rechazar_avatar', id);
+  notify(decision==='approved'?'✅ Foto aprobada':'❌ Foto rechazada');
+  loadPhotoQueue();
+}
+
+// ── REPORTES ──
+async function loadReports() {
+  const status = document.getElementById('reportFilter').value;
+  let q = sb.from('reports')
+    .select('*, reporter:profiles!reports_reporter_id_fkey(nickname), reported:profiles!reports_reported_id_fkey(nickname)')
+    .order('created_at',{ascending:false}).limit(50);
+  if (status) q = q.eq('status', status);
+  const { data: rows } = await q;
+  const el = document.getElementById('reportsTable');
+  if (!rows?.length) { el.innerHTML='<div class="empty-state">Sin reportes</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>Reporta</th><th>Reportado</th><th>Tipo</th><th>Contenido</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr>
+    ${rows.map(r=>`<tr>
+      <td>${esc(r.reporter?.nickname||'—')}</td>
+      <td><strong>${esc(r.reported?.nickname||'—')}</strong></td>
+      <td><span class="badge badge-pending">${esc(r.report_type)}</span></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.content_snapshot||'—')}</td>
+      <td class="mono">${new Date(r.created_at).toLocaleDateString('es-PE')}</td>
+      <td><span class="badge ${r.status==='pendiente'?'badge-muted':'badge-active'}">${r.status}</span></td>
+      <td>
+        ${r.status==='pendiente'?`<button class="btn-sm btn-unban" onclick="resolveReport('${r.id}','${r.reported_id||''}')">Resolver</button>`:''}
+        ${r.reported_id&&myAdminLevel>=1?`<button class="btn-sm btn-mute" onclick="openMuteModal('${r.reported_id}','${esc(r.reported?.nickname||'')}')">Mutear</button>`:''}
+        ${r.reported_id&&myAdminLevel>=2?`<button class="btn-sm btn-ban" onclick="banUser('${r.reported_id}','${esc(r.reported?.nickname||'')}')">Banear</button>`:''}
+      </td></tr>`).join('')}
+  </table>`;
+  document.getElementById('reportFilter').onchange = loadReports;
+}
+
+async function resolveReport(reportId, reportedId) {
+  await sb.from('reports').update({status:'resuelto',resolved_by:myProfile.id,resolved_at:new Date().toISOString()}).eq('id',reportId);
+  await logAction('resolver_reporte', reportedId||null, `Reporte ${reportId}`);
+  notify('✅ Reporte resuelto'); loadReports();
+}
+
+// ── USUARIOS ──
+async function loadUsers() {
+  const search = document.getElementById('userSearch').value.trim();
+  const filter = document.getElementById('userFilter').value;
+  let q = sb.from('profiles').select('*, profile_counters(*)').order('created_at',{ascending:false}).limit(100);
+  if (search) q = q.ilike('nickname', `%${search}%`);
+  const { data: users } = await q;
+  if (!users) return;
+  const { data: bans  } = await sb.from('bans').select('profile_id');
+  const { data: mutes } = await sb.from('mutes').select('profile_id,muted_until').gte('muted_until',new Date().toISOString());
+  const bannedSet = new Set((bans||[]).map(b=>b.profile_id));
+  const mutedMap  = Object.fromEntries((mutes||[]).map(m=>[m.profile_id,m.muted_until]));
+  let list = users;
+  if (filter==='banned') list = users.filter(u=>bannedSet.has(u.id));
+  if (filter==='muted')  list = users.filter(u=>mutedMap[u.id]);
+  const el = document.getElementById('usersTable');
+  if (!list.length) { el.innerHTML='<div class="empty-state">Sin resultados</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>Nickname</th><th>Desde</th><th>Estado</th><th>Reacciones</th><th>Acciones</th></tr>
+    ${list.map(u=>{
+      const banned = bannedSet.has(u.id), muted = !!mutedMap[u.id];
+      const badge  = banned?'<span class="badge badge-banned">Baneado</span>':muted?'<span class="badge badge-muted">Muteado</span>':'<span class="badge badge-active">Activo</span>';
+      return `<tr>
+        <td><strong>${esc(u.nickname)}</strong></td>
+        <td class="mono">${new Date(u.created_at).toLocaleDateString('es-PE')}</td>
+        <td>${badge}</td>
+        <td class="mono">${u.profile_counters?.reactions_received??0}</td>
+        <td>
+          ${!banned&&!muted&&myAdminLevel>=1?`<button class="btn-sm btn-mute" onclick="openMuteModal('${u.id}','${esc(u.nickname)}')">Mutear</button>`:''}
+          ${!banned&&myAdminLevel>=2?`<button class="btn-sm btn-kick" onclick="kickUser('${u.id}','${esc(u.nickname)}')">Kick</button>`:''}
+          ${!banned&&myAdminLevel>=2?`<button class="btn-sm btn-ban"  onclick="banUser('${u.id}','${esc(u.nickname)}')">Banear</button>`:''}
+          ${banned&&myAdminLevel>=2 ?`<button class="btn-sm btn-unban" onclick="unbanUser('${u.id}','${esc(u.nickname)}')">Desbanear</button>`:''}
+          ${myAdminLevel>=2?`<button class="btn-sm btn-history" onclick="viewHistory('${u.id}','${esc(u.nickname)}')">Historial</button>`:''}
+        </td></tr>`;
+    }).join('')}
+  </table>`;
+  document.getElementById('userSearch').oninput  = debounce(loadUsers, 400);
+  document.getElementById('userFilter').onchange = loadUsers;
+}
+
+// ── MUTE ──
+function setupMuteModal() {
+  document.querySelectorAll('.mute-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.mute-chip').forEach(c=>c.classList.remove('selected'));
+      chip.classList.add('selected');
+      selectedMuteMins = parseInt(chip.dataset.mins);
+      document.getElementById('muteCustomMins').value='';
+    });
+  });
+  document.getElementById('muteCustomMins').addEventListener('input', function(){
+    if(this.value){ document.querySelectorAll('.mute-chip').forEach(c=>c.classList.remove('selected')); selectedMuteMins=parseInt(this.value)||10; }
+  });
+  document.getElementById('muteCancelBtn').addEventListener('click',  ()=>document.getElementById('muteModal').classList.add('hidden'));
+  document.getElementById('muteConfirmBtn').addEventListener('click', ()=>confirmMute());
+}
+
+function openMuteModal(userId, nickname) {
+  muteTargetId = userId; selectedMuteMins = 10;
+  document.getElementById('muteTargetName').textContent = `Usuario: ${nickname}`;
+  document.querySelectorAll('.mute-chip').forEach((c,i)=>c.classList.toggle('selected',i===0));
+  document.getElementById('muteCustomMins').value='';
+  document.getElementById('muteModal').classList.remove('hidden');
+}
+
+async function confirmMute() {
+  const until = new Date(Date.now()+selectedMuteMins*60000).toISOString();
+  await sb.from('mutes').insert({profile_id:muteTargetId,muted_until:until,muted_by:myProfile.id});
+  await logAction('mute', muteTargetId, `${selectedMuteMins} minutos`);
+  document.getElementById('muteModal').classList.add('hidden');
+  notify(`🔇 Muteado por ${selectedMuteMins} min`); loadUsers();
+}
+
+async function kickUser(userId, nickname) {
+  if (!confirm(`¿Desconectar a ${nickname} ahora mismo?`)) return;
+  await adminChannel.send({type:'broadcast',event:'kick',payload:{userId}});
+  await logAction('kick', userId);
+  notify(`👢 ${nickname} desconectado`);
+}
+
+async function banUser(userId, nickname) {
+  if (!confirm(`¿Banear permanentemente a ${nickname}?`)) return;
+  await adminChannel.send({type:'broadcast',event:'kick',payload:{userId}});
+  await sb.from('bans').insert({profile_id:userId,banned_by:myProfile.id});
+  await logAction('ban', userId);
+  notify(`🚫 ${nickname} baneado`); loadUsers();
+}
+
+async function unbanUser(userId, nickname) {
+  if (!confirm(`¿Desbanear a ${nickname}?`)) return;
+  await sb.from('bans').delete().eq('profile_id',userId);
+  await logAction('unban', userId);
+  notify(`✅ ${nickname} desbaneado`); loadUsers();
+}
+
+async function viewHistory(userId, nickname) {
+  const { data: h } = await sb.from('nickname_history').select('*').eq('profile_id',userId).order('changed_at',{ascending:false});
+  document.getElementById('historyTitle').textContent = `Historial — ${nickname}`;
+  document.getElementById('historyContent').innerHTML = h?.length
+    ? h.map(r=>`<div class="history-item"><span class="mono">${new Date(r.changed_at).toLocaleString('es-PE')}</span><span>${esc(r.old_nickname)}</span></div>`).join('')
+    : '<div class="empty-state" style="padding:16px 0;">Sin cambios de nickname</div>';
+  document.getElementById('historyModal').classList.remove('hidden');
+  document.getElementById('historyCloseBtn').onclick = ()=>document.getElementById('historyModal').classList.add('hidden');
+}
+
+// ── CONFIG ──
+const CONFIG_LABELS = {
+  spam_threshold_connected:   {label:'Umbral modo saturado',      desc:'Nº de conectados para activar el modo estricto'},
+  max_meeting_pins:           {label:'Máx. pines por usuario',    desc:'Total de pines activos a la vez (incluye el destacado)'},
+  max_meeting_pins_destacado: {label:'Máx. pines destacados',     desc:'Normalmente 1 (duran 7 días)'}
+};
+
+async function loadConfig() {
+  const [{ data: cfg }, { data: countries }, { data: words }] = await Promise.all([
+    sb.from('app_config').select('*'),
+    sb.from('allowed_countries').select('*'),
+    sb.from('banned_words').select('*')
+  ]);
+  document.getElementById('configRows').innerHTML = (cfg||[]).map(c=>{
+    const m = CONFIG_LABELS[c.key]||{label:c.key,desc:''};
+    return `<div class="config-row">
+      <div class="config-label"><strong>${m.label}</strong><small>${m.desc}</small></div>
+      <input class="config-input" type="number" data-key="${esc(c.key)}" value="${esc(c.value)}" min="1">
+      <button class="btn-save" onclick="saveConfig('${esc(c.key)}')">Guardar</button>
+    </div>`;
+  }).join('');
+  document.getElementById('countriesList').innerHTML = '<div class="country-list">'+
+    (countries||[]).map(c=>`<label class="country-chip">
+      <input type="checkbox" ${c.enabled?'checked':''} onchange="toggleCountry('${esc(c.country_code)}',this.checked)">
+      ${esc(c.country_name)}</label>`).join('')+'</div>';
+  renderWords(words||[]);
+  document.getElementById('addWordBtn').onclick = addWord;
+}
+
+function renderWords(words) {
+  document.getElementById('wordsList').innerHTML = '<div class="words-list">'+
+    words.map(w=>`<div class="word-chip">${esc(w.word)}<button onclick="removeWord('${esc(w.word)}')">×</button></div>`).join('')+'</div>';
+}
+
+async function saveConfig(key) {
+  const val = document.querySelector(`input[data-key="${key}"]`).value;
+  await sb.from('app_config').update({value:val}).eq('key',key);
+  await logAction('config_change',null,`${key}=${val}`);
+  notify('✅ Guardado');
+}
+
+async function toggleCountry(code, enabled) {
+  await sb.from('allowed_countries').update({enabled}).eq('country_code',code);
+  await logAction('config_country',null,`${code}→${enabled?'ON':'OFF'}`);
+  notify(`${enabled?'✅':'❌'} ${code} ${enabled?'habilitado':'deshabilitado'}`);
+}
+
+async function addWord() {
+  const word = document.getElementById('newWordInput').value.trim().toLowerCase();
+  if (!word) return;
+  await sb.from('banned_words').insert({word});
+  document.getElementById('newWordInput').value='';
+  loadConfig();
+}
+
+async function removeWord(word) {
+  await sb.from('banned_words').delete().eq('word',word);
+  loadConfig();
+}
+
+// ── ADMINS ──
+async function loadRoles() {
+  const { data: roles } = await sb.from('admin_roles')
+    .select('*, profile:profiles(nickname)').order('level',{ascending:false});
+  const el = document.getElementById('rolesTable');
+  const names = {1:'Básico',2:'Senior',3:'Dueño'};
+  if (!roles?.length) { el.innerHTML='<div class="empty-state">Sin admins</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>Nickname</th><th>Nivel</th><th>Desde</th><th>Acción</th></tr>
+    ${roles.map(r=>`<tr>
+      <td><strong>${esc(r.profile?.nickname||'—')}</strong></td>
+      <td><span class="badge badge-${r.level}">Nivel ${r.level} — ${names[r.level]}</span></td>
+      <td class="mono">${new Date(r.assigned_at).toLocaleDateString('es-PE')}</td>
+      <td>${r.profile_id!==myProfile.id?`<button class="btn-sm btn-ban" onclick="removeAdmin('${r.profile_id}','${esc(r.profile?.nickname||'')}')">Quitar</button>`:'<span style="opacity:.4;font-size:12px;">Tú</span>'}</td>
+    </tr>`).join('')}
+  </table>`;
+  document.getElementById('addAdminBtn').onclick = addAdmin;
+}
+
+async function addAdmin() {
+  const nick  = document.getElementById('newAdminNick').value.trim();
+  const level = parseInt(document.getElementById('newAdminLevel').value);
+  if (!nick) return;
+  const { data: p } = await sb.from('profiles').select('id').eq('nickname',nick).maybeSingle();
+  if (!p) { notify('❌ Nickname no encontrado'); return; }
+  await sb.from('admin_roles').insert({profile_id:p.id,level,assigned_by:myProfile.id});
+  await logAction('add_admin',p.id,`Nivel ${level}`);
+  document.getElementById('newAdminNick').value='';
+  notify('✅ Admin agregado'); loadRoles();
+}
+
+async function removeAdmin(profileId, nickname) {
+  if (!confirm(`¿Quitar acceso de admin a ${nickname}?`)) return;
+  await sb.from('admin_roles').delete().eq('profile_id',profileId);
+  await logAction('remove_admin',profileId);
+  notify('✅ Admin removido'); loadRoles();
+}
+
+// ── ACTION LOG ──
+async function loadActionLog() {
+  const { data: log } = await sb.from('action_log')
+    .select('*, admin:profiles!action_log_admin_id_fkey(nickname), target:profiles!action_log_target_id_fkey(nickname)')
+    .order('created_at',{ascending:false}).limit(100);
+  const el = document.getElementById('actionLogTable');
+  if (!log?.length) { el.innerHTML='<div class="empty-state">Sin acciones registradas</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>Admin</th><th>Acción</th><th>Sobre</th><th>Detalle</th><th>Fecha/Hora</th></tr>
+    ${log.map(l=>`<tr>
+      <td>${esc(l.admin?.nickname||'—')}</td>
+      <td><span class="badge badge-pending">${esc(l.action_type)}</span></td>
+      <td>${esc(l.target?.nickname||'—')}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.details||'—')}</td>
+      <td class="mono">${new Date(l.created_at).toLocaleString('es-PE')}</td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+async function logAction(type, targetId, details) {
+  await sb.from('action_log').insert({admin_id:myProfile.id,action_type:type,target_id:targetId||null,details:details||null});
+}
+
+// ── Auth ──
+document.getElementById('loginBtn').addEventListener('click', () =>
+  sb.auth.signInWithOAuth({provider:'google', options:{redirectTo: window.location.href}})
+);
+document.getElementById('logoutBtn').addEventListener('click', async()=>{ await sb.auth.signOut(); window.location.reload(); });
+document.getElementById('logoutNoAccess').addEventListener('click', async()=>{ await sb.auth.signOut(); window.location.reload(); });
+
+// ── Helpers ──
+function notify(msg) {
+  const n = document.createElement('div'); n.className='notif'; n.textContent=msg;
+  document.body.appendChild(n); setTimeout(()=>n.remove(), 3000);
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+
+init();
+</script>
+</body>
+</html>
