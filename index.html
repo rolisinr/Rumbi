@@ -4,8 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rumbi</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2F80ED">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rumbi">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
@@ -213,6 +226,16 @@ label.terms{ display:flex; align-items:flex-start; gap:8px; font-size:12px; text
 @keyframes pinPop{ from{transform:scale(0) translateY(10px);} to{transform:scale(1) translateY(0);} }
 .my-pin-item{ background:#F6F7FB; border:1px solid rgba(47,128,237,.2); border-radius:10px; padding:8px 10px; font-size:12px; display:flex; align-items:center; gap:8px; color:#22252B; margin-bottom:5px; }
 .my-pin-del{ background:none; border:none; cursor:pointer; color:#C62828; font-size:16px; margin-left:auto; line-height:1; }
+/* Avatar picker */
+.emoji-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-bottom:14px; }
+.emoji-opt{ font-size:26px; text-align:center; padding:8px; border-radius:10px; cursor:pointer; border:2px solid transparent; transition:.1s; }
+.emoji-opt:hover{ background:rgba(47,128,237,.1); border-color:var(--accent); }
+.emoji-opt.active{ background:rgba(47,128,237,.15); border-color:var(--accent); }
+/* Profile forms */
+.profile-form-row{ display:flex; flex-direction:column; gap:5px; padding:10px 0; border-bottom:1px solid rgba(0,0,0,.07); }
+.profile-form-row label{ font-size:11px; font-weight:600; text-transform:uppercase; opacity:.5; color:#22252B; }
+.profile-form-row input{ padding:8px 12px; border-radius:10px; border:1px solid #ccc; font-size:13px; font-family:'Inter',sans-serif; }
+.profile-form-row .hint{ font-size:11px; opacity:.5; color:#22252B; }
 </style>
 </head>
 <body data-theme="night">
@@ -260,6 +283,7 @@ label.terms{ display:flex; align-items:flex-start; gap:8px; font-size:12px; text
   <div class="topbar">
     <h2>Rumbi <span id="myNicknameLabel" style="font-size:13px;color:#888;font-weight:400;font-family:'Inter',sans-serif;"></span></h2>
     <div style="display:flex;gap:8px;align-items:center;">
+      <button id="installBtn" class="pill-btn" style="display:none;background:var(--gold);color:#22252B;font-weight:600;">📲 Instalar</button>
       <span class="connected-badge" id="connectedCount">● 1</span>
       <button class="pill-btn" id="themeToggle">🌙 Noche</button>
       <button class="pill-btn" id="logoutBtn">Salir</button>
@@ -312,23 +336,45 @@ label.terms{ display:flex; align-items:flex-start; gap:8px; font-size:12px; text
       <div class="tab-pane" id="tab-profile">
         <div class="profile-tab-content">
           <div class="profile-avatar-big" id="tabAvatar">🙂</div>
+          <div style="text-align:center;margin-bottom:6px;">
+            <button onclick="document.getElementById('avatarModal').classList.remove('hidden')" style="background:none;border:1px solid var(--accent);color:var(--accent);padding:4px 14px;border-radius:999px;font-size:12px;cursor:pointer;">✏️ Cambiar avatar</button>
+          </div>
           <div class="profile-tab-nick" id="tabNick"></div>
           <div class="settings-group">
+            <div class="settings-label">Mi perfil</div>
+            <div class="profile-form-row">
+              <label>Nickname</label>
+              <input type="text" id="nickChangeInput" maxlength="20" placeholder="Nuevo nickname…">
+              <div class="hint" id="nickChangeHint"></div>
+              <button id="nickChangeBtn" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;margin-top:4px;align-self:flex-start;">Guardar nickname</button>
+            </div>
+            <div class="profile-form-row">
+              <label>Link de TikTok (opcional)</label>
+              <input type="url" id="tiktokInput" placeholder="https://tiktok.com/@tu_usuario" autocomplete="off">
+              <button id="tiktokSaveBtn" style="background:#FE2C55;color:#fff;border:none;padding:7px 14px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;margin-top:4px;align-self:flex-start;">🎵 Guardar TikTok</button>
+            </div>
+          </div>
+          <div class="settings-group">
             <div class="settings-label">Ubicación</div>
-            <div class="setting-row">
-              <span>Modo</span>
+            <div class="setting-row"><span>Modo</span>
               <div class="toggle-group">
                 <button class="toggle-btn active" id="gpsBtn">GPS</button>
                 <button class="toggle-btn" id="manualBtn">Manual</button>
               </div>
             </div>
-            <div class="setting-row">
-              <span>Pausar ubicación</span>
+            <div class="setting-row"><span>Pausar ubicación</span>
               <label class="switch"><input type="checkbox" id="pauseToggle"><span class="slider"></span></label>
             </div>
-            <div class="setting-row">
-              <span>Mostrar estela</span>
+            <div class="setting-row"><span>Mostrar estela</span>
               <label class="switch"><input type="checkbox" id="trailToggle" checked><span class="slider"></span></label>
+            </div>
+            <div class="setting-row"><span>Radio de visión del chat</span>
+              <select id="radiusSelect" style="border:1px solid #ccc;border-radius:8px;padding:4px 8px;font-size:12px;background:#fff;color:#22252B;">
+                <option value="all">Todos</option>
+                <option value="1km">1 km</option>
+                <option value="500m">500 m</option>
+                <option value="200m">200 m</option>
+              </select>
             </div>
           </div>
           <div class="settings-group">
@@ -340,8 +386,6 @@ label.terms{ display:flex; align-items:flex-start; gap:8px; font-size:12px; text
               <div class="shape-opt" data-shape="star">⭐</div>
             </div>
           </div>
-        </div>
-      </div>
           <div class="settings-group">
             <div class="settings-label">Puntos de encuentro</div>
             <button onclick="openPinModal()" style="width:100%;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">📍 Crear punto de encuentro</button>
@@ -430,6 +474,17 @@ label.terms{ display:flex; align-items:flex-start; gap:8px; font-size:12px; text
           <div class="shape-opt" data-shape="diamond">🔷</div>
           <div class="shape-opt" data-shape="star">⭐</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Avatar picker -->
+  <div id="avatarModal" class="modal-overlay hidden">
+    <div style="background:#F6F7FB;border:2px solid var(--accent);border-radius:18px;padding:20px;max-width:340px;width:92%;">
+      <h3 style="font-family:'Fredoka',sans-serif;color:var(--accent);margin:0 0 14px;">Elige tu avatar</h3>
+      <div class="emoji-grid" id="emojiGrid"></div>
+      <div style="text-align:right;">
+        <button onclick="document.getElementById('avatarModal').classList.add('hidden')" style="background:#F6F7FB;border:1px solid #ddd;padding:9px 18px;border-radius:999px;cursor:pointer;font-size:13px;">Cerrar</button>
       </div>
     </div>
   </div>
@@ -546,6 +601,7 @@ const RANK_INT    = 60000; // refresh ranking every 60s
 let map, myMarker, myProfile;
 let myPosition=null, myTrailPos=[], myTrailSegs=[];
 let channel, nightTiles, dayTiles;
+let myAvatar = '🙂';
 const otherUsers  = {};   // userId → { marker, trailPos, trailSegs }
 const bubbleQueues= {};   // markerKey → [msg,...]
 let lastMsgTime   = 0;
@@ -606,13 +662,18 @@ document.getElementById('saveNicknameBtn').addEventListener('click', async ()=>{
 //  START APP
 // ══════════════════════════════════════════════
 async function startApp(profile) {
+  setupPWA();
   myShape = profile.shape || 'circle';
+  myAvatar = profile.avatar || '🙂';
   await loadUserData();
   initMap(profile);
   setupTheme();
   setupTabs();
   setupChat();
   setupProfileTab(profile);
+  setupProfileForms(profile);
+  setupAvatarPicker();
+  setupRadiusSelector();
   setupRanking();
   setupMiniProfile();
   setupMobileToolbar(profile);
@@ -656,7 +717,8 @@ function initMap(profile) {
   nightTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:17});
   dayTiles   = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:17});
   nightTiles.addTo(map);
-  myMarker = L.marker([-12.0464,-77.0428],{ icon:makeIcon(profile.nickname,'🙂',myShape), draggable:false }).addTo(map);
+  initCluster();
+  myMarker = L.marker([-12.0464,-77.0428],{ icon:makeIcon(profile.nickname, myAvatar, myShape), draggable:false }).addTo(map);
   let firstFix=true;
   if (navigator.geolocation) {
     navigator.geolocation.watchPosition(pos=>{
@@ -702,10 +764,12 @@ function setupChat() {
   document.getElementById('chatInputMobile').addEventListener('keydown',e=>{ if(e.key==='Enter') sendChat('chatInputMobile'); });
 }
 
-function sendChat(inputId) {
+async function sendChat(inputId) {
   const input=document.getElementById(inputId);
-  const rawText=input.value.trim();
+  const rawText=input?.value.trim();
   if(!rawText||!myProfile||!channel) return;
+  const mutedUntil=await isMuted();
+  if(mutedUntil){ const h=mutedUntil.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}); toast(`🔇 Silenciado hasta las ${h}`); return; }
   const now=Date.now();
   if(now-lastMsgTime<SPAM_CD){
     const wait=SPAM_CD-(now-lastMsgTime);
@@ -716,7 +780,7 @@ function sendChat(inputId) {
   lastMsgTime=now;
   const text=filterBadWords(rawText);
   input.value='';
-  const payload={ userId:myProfile.id, nickname:myProfile.nickname, emoji:'🙂', shape:myShape, message:text };
+  const payload={ userId:myProfile.id, nickname:myProfile.nickname, emoji:myAvatar, shape:myShape, message:text };
   addBubble(myMarker,'me',text);
   addToChatPanel(myProfile.nickname, text, true);
   channel.send({ type:'broadcast', event:'chat', payload });
@@ -724,7 +788,7 @@ function sendChat(inputId) {
 
 // ── Profile tab ──
 function setupProfileTab(profile) {
-  document.getElementById('tabAvatar').textContent = '🙂';
+  document.getElementById('tabAvatar').textContent = myAvatar;
   document.getElementById('tabNick').textContent = profile.nickname;
   document.querySelector(`[data-shape="${myShape}"]`)?.classList.add('active');
 
@@ -943,7 +1007,7 @@ function startRealtime(profile) {
     await channel.track({ userId:profile.id, nickname:profile.nickname });
     setInterval(()=>{
       if(!myPosition||locationPaused) return;
-      channel.send({ type:'broadcast', event:'position', payload:{ userId:profile.id, nickname:profile.nickname, emoji:'🙂', shape:myShape, lat:myPosition.lat, lng:myPosition.lng } });
+      channel.send({ type:'broadcast', event:'position', payload:{ userId:profile.id, nickname:profile.nickname, emoji:myAvatar, shape:myShape, lat:myPosition.lat, lng:myPosition.lng } });
     }, POS_INT);
   });
 }
@@ -951,8 +1015,9 @@ function startRealtime(profile) {
 function handlePosition({ userId, nickname, emoji, shape, lat, lng }) {
   if(myBlocks.has(userId)) return; // blocked & hidden
   if(!otherUsers[userId]){
-    const marker=L.marker([lat,lng],{ icon:makeIcon(nickname,emoji||'🙂',shape||'circle') }).addTo(map);
+    const marker=L.marker([lat,lng],{ icon:makeIcon(nickname,emoji||'🙂',shape||'circle') });
     marker.on('click',e=>{ L.DomEvent.stopPropagation(e); showMiniProfile(userId); });
+    clusterGroup.addLayer(marker);
     otherUsers[userId]={ marker, nickname, emoji, shape, trailPos:[], trailSegs:[] };
   } else {
     const u=otherUsers[userId];
@@ -964,13 +1029,14 @@ function handlePosition({ userId, nickname, emoji, shape, lat, lng }) {
 
 function handleIncomingChat({ userId, nickname, message }) {
   if(myBlocks.has(userId)) return;
-  if(otherUsers[userId]) addBubble(otherUsers[userId].marker, userId, message);
+  if(otherUsers[userId] && isWithinRadius(userId)) addBubble(otherUsers[userId].marker, userId, message);
   addToChatPanel(nickname, message, false);
 }
 
 function removeUser(userId) {
   const u=otherUsers[userId]; if(!u) return;
-  map.removeLayer(u.marker); u.trailSegs.forEach(s=>map.removeLayer(s));
+  clusterGroup.removeLayer(u.marker);
+  u.trailSegs.forEach(s=>map.removeLayer(s));
   delete otherUsers[userId]; delete bubbleQueues[userId];
   if(miniUserId===userId) hideMiniProfile();
 }
@@ -1110,6 +1176,182 @@ function setupMobileToolbar(profile) {
     document.getElementById('gpsBtnM').classList.remove('active');
     document.getElementById('manualBtnM').classList.add('active');
   });
+}
+
+// ══════════════════════════════════════════════
+//  PWA: Service Worker + Install prompt
+// ══════════════════════════════════════════════
+let deferredInstallPrompt = null;
+
+function setupPWA() {
+  // Registrar Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('SW registrado:', reg.scope))
+      .catch(err => console.warn('SW error:', err));
+  }
+
+  // Capturar el evento de instalación
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const btn = document.getElementById('installBtn');
+    if (btn) btn.style.display = 'block';
+  });
+
+  // Botón instalar
+  document.getElementById('installBtn')?.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    document.getElementById('installBtn').style.display = 'none';
+    if (outcome === 'accepted') toast('✅ ¡Rumbi instalado en tu dispositivo!');
+  });
+
+  // Ocultar botón si ya está instalada
+  window.addEventListener('appinstalled', () => {
+    document.getElementById('installBtn').style.display = 'none';
+    deferredInstallPrompt = null;
+  });
+}
+
+// ══════════════════════════════════════════════
+//  CLUSTERING
+// ══════════════════════════════════════════════
+let clusterGroup;
+
+function initCluster() {
+  clusterGroup = L.markerClusterGroup({
+    maxClusterRadius: 60,
+    disableClusteringAtZoom: 16,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    iconCreateFunction: cluster => L.divIcon({
+      html: `<div style="background:var(--accent);color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-size:15px;font-weight:700;box-shadow:0 0 10px var(--accent);">${cluster.getChildCount()}</div>`,
+      className:'', iconSize:[36,36]
+    })
+  });
+  map.addLayer(clusterGroup);
+}
+
+// ══════════════════════════════════════════════
+//  AVATAR PICKER
+// ══════════════════════════════════════════════
+const AVATAR_EMOJIS = [
+  '🦊','🐱','🐺','🦁','🐻','🐼',
+  '🦋','🦅','🦉','🐸','🐙','🦈',
+  '🎭','👾','🤖','👻','🎃','🌟',
+  '🔥','⚡','🌈','🎯','💎','🚀',
+  '🥷','🧙','🦸','🕵️','🎨','🎵',
+  '🍕','🌮','🍜','☕','🎮','⚽'
+];
+
+function setupAvatarPicker() {
+  const grid = document.getElementById('emojiGrid');
+  if (!grid) return;
+  grid.innerHTML = AVATAR_EMOJIS.map(e =>
+    `<div class="emoji-opt ${e===myAvatar?'active':''}" onclick="selectAvatar('${e}')">${e}</div>`
+  ).join('');
+}
+
+async function selectAvatar(emoji) {
+  myAvatar = emoji;
+  document.querySelectorAll('.emoji-opt').forEach(el => el.classList.toggle('active', el.textContent===emoji));
+  document.getElementById('tabAvatar').textContent = emoji;
+  document.getElementById('tabAvatarMobile').textContent = emoji;
+  await sb.from('profiles').update({ avatar: emoji }).eq('id', myProfile.id);
+  myMarker.setIcon(makeIcon(myProfile.nickname, emoji, myShape));
+  document.getElementById('avatarModal').classList.add('hidden');
+  toast('✅ Avatar actualizado');
+}
+
+// ══════════════════════════════════════════════
+//  PERFIL: NICKNAME CHANGE + TIKTOK
+// ══════════════════════════════════════════════
+function setupProfileForms(profile) {
+  // Nickname change
+  const nickInput = document.getElementById('nickChangeInput');
+  const nickHint  = document.getElementById('nickChangeHint');
+  const nickBtn   = document.getElementById('nickChangeBtn');
+  if (!nickInput) return;
+
+  nickInput.value = profile.nickname;
+  const lastChange = profile.nickname_changed_at ? new Date(profile.nickname_changed_at) : null;
+  const daysSince  = lastChange ? (Date.now()-lastChange)/(1000*60*60*24) : 999;
+  const daysLeft   = Math.ceil(7 - daysSince);
+
+  if (daysLeft > 0) {
+    nickInput.disabled = true;
+    nickBtn.disabled   = true;
+    nickBtn.style.opacity = '.4';
+    nickHint.textContent = `Podrás cambiarlo en ${daysLeft} día${daysLeft>1?'s':''}`;
+  } else {
+    nickHint.textContent = 'Cambiable ahora';
+    nickBtn.addEventListener('click', async () => {
+      const newNick = nickInput.value.trim();
+      if (newNick.length < 3) { toast('Mínimo 3 caracteres'); return; }
+      if (newNick === profile.nickname) { toast('Es el mismo nickname'); return; }
+      const { error } = await sb.from('profiles').update({ nickname: newNick, nickname_changed_at: new Date().toISOString() }).eq('id', myProfile.id);
+      if (error?.code === '23505') { toast('Ese nickname ya está en uso'); return; }
+      if (error) { toast('Error al guardar'); return; }
+      myProfile.nickname = newNick;
+      document.getElementById('tabNick').textContent = newNick;
+      document.getElementById('myNicknameLabel').textContent = '— ' + newNick;
+      myMarker.setIcon(makeIcon(newNick, myAvatar, myShape));
+      nickInput.disabled = true; nickBtn.disabled = true; nickBtn.style.opacity='.4';
+      nickHint.textContent = 'Podrás cambiarlo en 7 días';
+      toast('✅ Nickname actualizado');
+    });
+  }
+
+  // TikTok
+  const tiktokInput = document.getElementById('tiktokInput');
+  const tiktokBtn   = document.getElementById('tiktokSaveBtn');
+  if (tiktokInput && profile.tiktok_link) tiktokInput.value = profile.tiktok_link;
+  tiktokBtn?.addEventListener('click', async () => {
+    const link = tiktokInput.value.trim();
+    if (link && !link.includes('tiktok.com')) { toast('El link debe ser de tiktok.com'); return; }
+    await sb.from('profiles').update({ tiktok_link: link||null }).eq('id', myProfile.id);
+    myProfile.tiktok_link = link||null;
+    toast(link ? '✅ TikTok guardado' : 'TikTok eliminado');
+  });
+}
+
+// ══════════════════════════════════════════════
+//  MUTE CHECK
+// ══════════════════════════════════════════════
+async function isMuted() {
+  const { data } = await sb.from('mutes')
+    .select('muted_until').eq('profile_id', myProfile.id)
+    .gt('muted_until', new Date().toISOString()).maybeSingle();
+  return data ? new Date(data.muted_until) : null;
+}
+
+// ══════════════════════════════════════════════
+//  RADIO DE VISIÓN
+// ══════════════════════════════════════════════
+let myVisibilityRadius = 'all';
+
+function setupRadiusSelector() {
+  document.getElementById('radiusSelect')?.addEventListener('change', function(){
+    myVisibilityRadius = this.value;
+  });
+}
+
+function distanceKm(lat1,lng1,lat2,lng2) {
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+
+function isWithinRadius(userId) {
+  if (!myPosition || myVisibilityRadius==='all') return true;
+  const u=otherUsers[userId]; if(!u) return true;
+  const pos=u.marker.getLatLng();
+  const dist=distanceKm(myPosition.lat,myPosition.lng,pos.lat,pos.lng);
+  const limits={'200m':.2,'500m':.5,'1km':1};
+  return dist<=(limits[myVisibilityRadius]||Infinity);
 }
 
 // ══════════════════════════════════════════════
